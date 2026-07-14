@@ -130,3 +130,56 @@ Con `./start.sh` corriendo en :8003, verificado con `curl` y `agent-browser` (he
 ### 2.5 Próximo paso
 
 Fase 2 — notificador nativo macOS (launchd + osascript), gancho `?quiz=1` listo.
+
+---
+
+## Paso 3 · Fase 2: frases + notificador nativo (2026-07-14)
+
+**Meta:** Implementar el diseño aprobado (spec `2026-07-14-fase2-notificador-frases-design.md`): vocabulario multi-palabra (frases) y un notificador nativo macOS que dispare el quiz aunque el navegador esté cerrado, con backend siempre vivo bajo launchd.
+
+### 3.1 Qué se construyó
+
+- **Frases como vocabulario** (`backend/main.py`, `add_word`): entrada con espacios internos → `type: "phrase"`, salta `fetch_dictionary`/Datamuse y solo traduce vía `translate()` (fallback a la frase misma si MyMemory falla); resto de campos derivados (`ipa`, `example_en`, etc.) quedan `""` — el esquema de `words.json` no cambia. Validación de 80 caracteres y duplicados aplica igual que a palabras sueltas. El motor de quiz no necesitó cambios: un ítem sin `example_en` ya queda fuera de `cloze`/`mc_phrase` por `eligible_types` y participa normalmente en `mc_word`/`typing`.
+- **Notificador** (`notifier/quiz_dialog.py`): módulo separado en funciones puras (`applescript_escape`, `build_question_dialog`, `build_result_dialog`, `parse_dialog_output`) y capa I/O (`run_osascript`, `api`) para poder testear sin GUI. `main()` orquesta: lockfile (`/tmp/elearn-quiz.lock`, staleness 10 min) → `GET /api/quiz/next` → diálogo AppleScript (`choose from list` para opción múltiple, `display dialog` con campo de texto para typing) → `POST /api/quiz/answer` → diálogo de resultado con botón "+ Agregar" → `POST /api/words`. Silencioso (exit 0) si el backend está caído o si el diálogo anterior sigue abierto.
+- **`notifier/install.sh`**: genera y (re)instala dos LaunchAgents en `~/Library/LaunchAgents/` — `com.josemuniz.elearn-backend` (`start.sh`, `KeepAlive`, `RunAtLoad`) y `com.josemuniz.elearn-quiz` (`quiz_dialog.py`, `StartInterval` = N×60 seg, default 5 min, rango 1-120). `install.sh --uninstall` descarga ambos y borra los plists sin tocar logs ni datos.
+- **`start.sh` (patch de Task 4):** launchd corre con un PATH mínimo que resuelve `python3` al intérprete de sistema de Apple (sin `uvicorn`/`fastapi`). El script ahora prueba el `python3` del PATH y, si no tiene las deps, cae al `anaconda3` que sí las tiene; si ninguno sirve, falla ruidoso (`exit 1` con mensaje) en vez de arrancar silenciosamente con el intérprete equivocado.
+- **Tests:** 17 tests nuevos — `backend/tests/test_words.py` (6: frase traducida, fallback de traducción, límite de 80 chars, duplicado 409, palabra sola sigue usando dictionary, elegibilidad de tipos) y `backend/tests/test_notifier.py` (11: escapado AppleScript, construcción de diálogos MC/typing, parseo de `choose from list`/`display dialog`, backend caído sale silencioso, lockfile fresco se salta, flujo completo mockeado pregunta→respuesta→POST, skip no penaliza).
+
+### 3.2 Verificación — Step 1: suite completa
+
+Comando:
+```
+python3 -m pytest backend/tests/ -v
+```
+Output real (tail):
+```
+backend/tests/test_words.py::test_add_phrase_skips_dictionary PASSED     [ 87%]
+backend/tests/test_words.py::test_add_phrase_translate_fallback PASSED   [ 90%]
+backend/tests/test_words.py::test_add_word_too_long_400 PASSED           [ 92%]
+backend/tests/test_words.py::test_add_phrase_duplicate_409 PASSED        [ 95%]
+backend/tests/test_words.py::test_single_word_still_uses_dictionary PASSED [ 97%]
+backend/tests/test_words.py::test_phrase_only_eligible_for_mc_word_and_typing PASSED [100%]
+
+============================== 40 passed in 0.41s ==============================
+```
+
+### 3.3 Verificación — Step 2: criterios de éxito del spec §8 (automatizables)
+
+1. **Frase real de punta a punta:** con `./start.sh` corriendo, `POST /api/words {"word": "see you later"}` → `200`, `type: "phrase"`, `word_es: "¡hasta luego"` (traducida por MyMemory, no fallback). Se consultó `GET /api/quiz/next?types=mc_word` 20 veces seguidas: la frase apareció como **prompt** (`"prompt": "see you later"`, dirección `en_to_es`, y también como prompt en español pidiendo la traducción al inglés) y como **opción distractora** en preguntas de otras palabras — confirma que participa del motor sin cambios. La frase de prueba se deja en el vocabulario (indicado por el brief).
+2. **LaunchAgents instalados:** `launchctl list | grep elearn` → 2 líneas (`com.josemuniz.elearn-quiz`, `com.josemuniz.elearn-backend`).
+3. **KeepAlive:** ya verificado en Task 4 Step 4 (matar el proceso uvicorn → launchd lo resucita en segundos).
+4. **Uninstall + reinstall:**
+   ```
+   ./notifier/install.sh --uninstall && launchctl list | grep elearn; echo "exit=$?"
+   ```
+   Output: `✓ Agentes elearn desinstalados`, sin líneas de `grep`, `exit=1` (no-match). Reinstalado de inmediato con `./notifier/install.sh 5` → `✓ Backend: com.josemuniz.elearn-backend (KeepAlive, ...)` / `✓ Quiz: com.josemuniz.elearn-quiz cada 5 min (...)`; `launchctl list | grep elearn` volvió a mostrar los 2 agentes (backend con PID nuevo, confirmando `RunAtLoad`) y `curl http://localhost:8003/api/words` respondió `200` tras el reinstall. **Estado final: instalado, intervalo 5 min** (el entregable queda así).
+5. **Criterios interactivos** (responder el diálogo real, "+ Agregar" desde el diálogo): pendiente validación interactiva del usuario — no automatizables sin GUI real.
+
+### 3.4 Archivos
+
+- **Nuevos:** `notifier/quiz_dialog.py`, `notifier/install.sh`, `notifier/__init__.py`, `backend/tests/test_words.py`, `backend/tests/test_notifier.py`
+- **Modificados:** `backend/main.py` (`add_word` con camino de frases), `frontend/index.html` (placeholder/ayuda mencionan frases), `start.sh` (resolución de python fail-loud), `docs/ARCHITECTURE.md`, `docs/BITACORA.md`
+
+### 3.5 Próximo paso
+
+Validación interactiva del usuario (responder un diálogo real disparado por launchd, probar "+ Agregar" con una frase nueva desde el diálogo) + revisión global de rama antes de merge. Follow-up pendiente de fase 1 (fuera de este plan): aplicar `esc()` en `renderWords()`.

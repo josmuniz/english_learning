@@ -12,6 +12,7 @@ App local de vocabulario inglés→español. Una sola página HTML consume una A
 | Backend | FastAPI + Uvicorn | `backend/main.py` | 8003 |
 | Storage | JSON plano | `data/words.json` | — |
 | Motor de quiz | Python puro (sin I/O) | `backend/quiz.py` | — |
+| Notificador nativo | Python stdlib + osascript + launchd | `notifier/quiz_dialog.py` + `notifier/install.sh` | — |
 
 ## Flujo de datos
 
@@ -30,6 +31,15 @@ Timer (frontend, persistente en localStorage)
   → GET /api/quiz/next (ponderado por fallos, 4 tipos, distractores del propio vocabulario)
   → modal responde → POST /api/quiz/answer (match tolerante) → stats en words.json
 ```
+
+```
+launchd (com.josemuniz.elearn-quiz, cada N min)
+  → notifier/quiz_dialog.py → GET /api/quiz/next
+  → diálogo AppleScript (choose from list / display dialog) — el quiz se responde ahí
+  → POST /api/quiz/answer → resultado ✓/✗ con "+ Agregar" (POST /api/words)
+launchd (com.josemuniz.elearn-backend, KeepAlive) mantiene el backend :8003 siempre vivo
+```
+Recomendación: con el notificador instalado, dejar el timer web desactivado (§6 del spec fase 2).
 
 ## Decisiones
 
