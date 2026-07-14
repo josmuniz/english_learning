@@ -230,9 +230,29 @@
         <h3 style="font-size:15px; font-weight:700; margin-bottom:16px;">⏱ Recordatorio automático</h3>
         <div style="margin-bottom:16px;">
           <p style="font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Intervalo</p>
-          <div style="display:flex; gap:8px;">
-            <button class="btn-ghost" id="int-15" onclick="setInterval_(15)" style="flex:1;">15 min</button>
-            <button class="btn-ghost" id="int-20" onclick="setInterval_(20)" style="flex:1;">20 min</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn-ghost" id="int-5"  onclick="setIntervalMin(5)"  style="flex:1;">5 min</button>
+            <button class="btn-ghost" id="int-10" onclick="setIntervalMin(10)" style="flex:1;">10 min</button>
+            <button class="btn-ghost" id="int-15" onclick="setIntervalMin(15)" style="flex:1;">15 min</button>
+            <button class="btn-ghost" id="int-30" onclick="setIntervalMin(30)" style="flex:1;">30 min</button>
+            <input id="int-custom" class="inp" type="number" min="1" max="120" placeholder="otro"
+              style="flex:1; min-width:70px; padding:8px 10px;"
+              onchange="setIntervalMin(parseInt(this.value)||15)"/>
+          </div>
+          <div style="margin-top:12px;">
+            <p style="font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Tipos de pregunta</p>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:13px;">
+              <label><input type="checkbox" id="type-mc_word" checked onchange="toggleType('mc_word')"/> Palabra (opciones)</label>
+              <label><input type="checkbox" id="type-mc_phrase" checked onchange="toggleType('mc_phrase')"/> Frase (opciones)</label>
+              <label><input type="checkbox" id="type-cloze" checked onchange="toggleType('cloze')"/> Completar hueco</label>
+              <label><input type="checkbox" id="type-typing" checked onchange="toggleType('typing')"/> Escribir</label>
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <p style="font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Preguntas por interrupción</p>
+            <select id="per-interrupt" class="inp" style="width:auto; padding:6px 10px;" onchange="cfg.perInterrupt=parseInt(this.value); saveConfig();">
+              <option value="1">1</option><option value="3">3</option><option value="5">5</option>
+            </select>
           </div>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -371,12 +391,57 @@ const API = 'http://localhost:8003';
 
 // ── State ──────────────────────────────────────────────────────────
 let allWords = [];
-let timerActive = false;
-let intervalMinutes = 15;
-let timerSeconds = 0;
-let timerTotal = 0;
 let timerTick = null;
-let quizMode = 'both';
+let timerSeconds = 0;   // transitorio: Task 7 los elimina al reescribir el timer
+let timerTotal = 0;
+
+const CONFIG_KEY = 'elearn_config';
+const DEFAULT_CFG = {
+  intervalMin: 15, direction: 'both',
+  types: ['mc_word', 'mc_phrase', 'cloze', 'typing'],
+  perInterrupt: 1, timerActive: false, timerEndsAt: null,
+};
+let cfg = loadConfig();
+
+function loadConfig() {
+  try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}') }; }
+  catch { return { ...DEFAULT_CFG }; }
+}
+function saveConfig() { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+
+function setIntervalMin(min) {
+  cfg.intervalMin = Math.max(1, Math.min(120, min));
+  saveConfig();
+  ['5','10','15','30'].forEach(m => {
+    const el = document.getElementById(`int-${m}`);
+    const active = cfg.intervalMin === parseInt(m);
+    el.style.background = active ? 'var(--tag-bg)' : '';
+    el.style.color = active ? 'var(--tag-txt)' : '';
+    el.style.borderColor = active ? 'var(--accent)' : '';
+  });
+  const custom = document.getElementById('int-custom');
+  if (!['5','10','15','30'].includes(String(cfg.intervalMin))) custom.value = cfg.intervalMin;
+}
+
+function toggleType(t) {
+  const idx = cfg.types.indexOf(t);
+  if (idx >= 0) cfg.types.splice(idx, 1); else cfg.types.push(t);
+  if (cfg.types.length === 0) {          // nunca dejar 0 tipos
+    cfg.types.push(t);
+    document.getElementById(`type-${t}`).checked = true;
+    toast('Debe haber al menos un tipo activo', 'error');
+  }
+  saveConfig();
+}
+
+function applyConfigToUI() {
+  setIntervalMin(cfg.intervalMin);
+  setQuizMode(cfg.direction);
+  ['mc_word','mc_phrase','cloze','typing'].forEach(t => {
+    document.getElementById(`type-${t}`).checked = cfg.types.includes(t);
+  });
+  document.getElementById('per-interrupt').value = String(cfg.perInterrupt);
+}
 
 // Session state
 let sessionWords = [];
@@ -573,7 +638,8 @@ async function deleteWord(id) {
 
 // ── Practice helpers ───────────────────────────────────────────────
 function setQuizMode(mode) {
-  quizMode = mode;
+  cfg.direction = mode;
+  saveConfig();
   ['both', 'es_to_en', 'en_to_es'].forEach(m => {
     const el = document.getElementById(`mode-${m}`);
     el.style.background = m === mode ? 'var(--tag-bg)' : '';
@@ -582,48 +648,41 @@ function setQuizMode(mode) {
   });
 }
 
-function setInterval_(min) {
-  intervalMinutes = min;
-  ['15','20'].forEach(m => {
-    const el = document.getElementById(`int-${m}`);
-    const active = String(min) === m;
-    el.style.background = active ? 'var(--tag-bg)' : '';
-    el.style.color = active ? 'var(--tag-txt)' : '';
-    el.style.borderColor = active ? 'var(--accent)' : '';
-  });
-}
-
 function updatePracticeSection() {
   const has = allWords.length >= 1;
   const btn = document.getElementById('start-practice-btn');
   const hint = document.getElementById('practice-start-hint');
   btn.disabled = !has;
-  hint.textContent = has
-    ? `Tienes ${allWords.length} palabra${allWords.length!==1?'s':''} lista${allWords.length!==1?'s':''} para practicar.`
-    : 'Necesitas al menos 1 palabra en tu vocabulario para practicar.';
+  hint.textContent = !has
+    ? 'Necesitas al menos 1 palabra en tu vocabulario para practicar.'
+    : allWords.length < 4
+      ? `Tienes ${allWords.length} palabra(s). Agrega al menos 4 para activar la opción múltiple (por ahora todo será de escribir).`
+      : `Tienes ${allWords.length} palabras listas para practicar.`;
 }
 
 // ── Timer ──────────────────────────────────────────────────────────
 function toggleTimer() {
-  if (timerActive) stopTimer(); else startTimer();
+  if (cfg.timerActive) stopTimer(); else startTimer();
 }
 
 function startTimer() {
   if (allWords.length === 0) { toast('Agrega palabras primero', 'error'); return; }
   requestNotifPermission();
-  timerActive = true;
-  timerTotal = intervalMinutes * 60;
+  cfg.timerActive = true;
+  saveConfig();
+  timerTotal = cfg.intervalMin * 60;
   timerSeconds = timerTotal;
   document.getElementById('timer-toggle-btn').textContent = 'Desactivar';
   document.getElementById('timer-toggle-btn').style.background = 'var(--red)';
   document.getElementById('timer-status-text').innerHTML = '<span style="display:flex;align-items:center;gap:6px;"><span class="pulse-dot"></span> Activo</span>';
   document.getElementById('ring-subtitle').textContent = 'Próxima práctica en…';
   timerTick = setInterval(tickTimer, 1000);
-  toast(`⏱ Timer activado: cada ${intervalMinutes} minutos`, 'success');
+  toast(`⏱ Timer activado: cada ${cfg.intervalMin} minutos`, 'success');
 }
 
 function stopTimer() {
-  timerActive = false;
+  cfg.timerActive = false;
+  saveConfig();
   clearInterval(timerTick);
   document.getElementById('timer-toggle-btn').textContent = 'Activar';
   document.getElementById('timer-toggle-btn').style.background = '';
@@ -698,9 +757,9 @@ function startPractice() {
 
 function loadQuestion() {
   currentWord = sessionWords[sessionIdx];
-  currentQuizType = quizMode === 'both'
+  currentQuizType = cfg.direction === 'both'
     ? (Math.random() > .5 ? 'es_to_en' : 'en_to_es')
-    : quizMode;
+    : cfg.direction;
 
   // Progress
   const total = sessionWords.length;
@@ -862,7 +921,7 @@ function showSummary() {
   document.getElementById('summary-detail').textContent =
     `${sessionCorrect} correctas · ${sessionWrong} incorrectas de ${total} palabras`;
   document.getElementById('summary-next-hint').textContent =
-    timerActive ? `Próxima sesión en ${intervalMinutes} minutos` : 'Activa el timer para practicar automáticamente';
+    cfg.timerActive ? `Próxima sesión en ${cfg.intervalMin} minutos` : 'Activa el timer para practicar automáticamente';
 
   document.getElementById('session-summary').style.display = '';
 }
@@ -913,8 +972,7 @@ if ('speechSynthesis' in window) {
 }
 
 // ── Init ───────────────────────────────────────────────────────────
-setInterval_(15);
-setQuizMode('both');
+applyConfigToUI();
 loadWords();
 </script>
 </body>
