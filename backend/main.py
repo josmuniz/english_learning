@@ -1,0 +1,342 @@
+import json
+import uuid
+import re
+import httpx
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+app = FastAPI(title="English Learning API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+DICT_API      = "https://api.dictionaryapi.dev/api/v2/entries/en"
+TRANS_API     = "https://api.mymemory.translated.net/get"
+DATAMUSE_API  = "https://api.datamuse.com/words"
+DATA_FILE     = Path(__file__).parent.parent / "data" / "words.json"
+
+
+# ── IPA → Spanish phonetic approximation ─────────────────────────────────────
+# Maps common IPA symbols to Spanish-readable equivalents
+_IPA_MAP = [
+    # Digraphs first (order matters)
+    ("ɜː",  "er"),  ("ɪə",  "ia"),  ("ʊə",  "ua"),  ("eɪ",  "ei"),
+    ("aɪ",  "ai"),  ("ɔɪ",  "oi"),  ("aʊ",  "au"),  ("əʊ",  "ou"),
+    ("iː",  "i"),   ("uː",  "u"),   ("ɑː",  "a"),   ("ɔː",  "o"),
+    ("tʃ",  "ch"),  ("dʒ",  "y"),
+    # Single vowels
+    ("æ",   "a"),   ("ə",   "e"),   ("ɪ",   "i"),   ("ʊ",   "u"),
+    ("ʌ",   "a"),   ("ɛ",   "e"),   ("ɐ",   "a"),   ("ɑ",   "a"),   ("ɒ",   "o"),
+    # Single consonants
+    ("ð",   "d"),   ("θ",   "z"),   ("ʃ",   "sh"),  ("ʒ",   "y"),
+    ("ŋ",   "ng"),  ("ɹ",   "r"),   ("ɾ",   "r"),   ("j",   "y"),
+    ("w",   "w"),   ("h",   "j"),   ("ɡ",   "g"),   ("ʔ",   ""),
+    # Stress / length markers
+    ("ˈ",   "-"),   ("ˌ",   ""),    ("ː",   ""),
+]
+
+def ipa_to_spanish(ipa: str) -> str:
+    s = ipa.strip("/[]")
+    for src, tgt in _IPA_MAP:
+        s = s.replace(src, tgt)
+    s = re.sub(r"[^\w\-]", "", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s.lower() or ipa
+
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+
+def load_words() -> list:
+    if DATA_FILE.exists():
+        return json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    return []
+
+
+def save_words(words: list):
+    DATA_FILE.write_text(json.dumps(words, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+# ── Models ────────────────────────────────────────────────────────────────────
+
+class WordRequest(BaseModel):
+    word: str
+
+class ValidateRequest(BaseModel):
+    word_en: str
+    sentence: str
+
+class QuizCheckRequest(BaseModel):
+    word_id: str
+    quiz_type: str   # "es_to_en" | "en_to_es"
+    answer: str
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+async def fetch_dictionary(word: str, client: httpx.AsyncClient) -> dict:
+    r = await client.get(f"{DICT_API}/{word}", timeout=10)
+    if r.status_code != 200:
+        raise HTTPException(404, f'No se encontró "{word}" en el diccionario')
+    entries = r.json()
+    entry = entries[0]
+
+    # Collect all meanings across entries
+    all_meanings = []
+    for e in entries:
+        all_meanings.extend(e.get("meanings", []))
+
+    # Pick first meaning with a definition
+    meaning = next((m for m in all_meanings if m.get("definitions")), all_meanings[0] if all_meanings else {})
+    defn = meaning.get("definitions", [{}])[0]
+
+    # Find an example sentence
+    example_en = defn.get("example", "")
+    if not example_en:
+        for m in all_meanings:
+            for d in m.get("definitions", []):
+                if d.get("example"):
+                    example_en = d["example"]
+                    break
+            if example_en:
+                break
+    # Fallback example using the word itself
+    if not example_en:
+        part = meaning.get("partOfSpeech", "word")
+        if part == "noun":
+            example_en = f"The {entry['word']} was remarkable."
+        elif part == "verb":
+            example_en = f"She decided to {entry['word']} every day."
+        elif part == "adjective":
+            example_en = f"It was a very {entry['word']} experience."
+        else:
+            example_en = f"Learning about {entry['word']} is important."
+
+    # synonyms/antonyms fetched separately via Datamuse — leave empty here
+    synonyms: list[str] = []
+    antonyms: list[str] = []
+
+    # IPA phonetic
+    ipa = entry.get("phonetic", "")
+    if not ipa:
+        for ph in entry.get("phonetics", []):
+            if ph.get("text"):
+                ipa = ph["text"]
+                break
+
+    return {
+        "word_en":      entry["word"].lower(),
+        "type":         meaning.get("partOfSpeech", "word"),
+        "ipa":          ipa,
+        "definition_en": defn.get("definition", "")[:120],
+        "example_en":   example_en,
+        "synonym_raw":  "",   # filled by Datamuse in add_word
+        "antonym_raw":  "",   # filled by Datamuse in add_word
+    }
+
+
+async def datamuse_word(word: str, rel: str, client: httpx.AsyncClient) -> str:
+    """Fetch best synonym (rel_syn) or antonym (rel_ant) from Datamuse.
+    Takes the highest-scored single word of 3-10 chars from top-10 results."""
+    try:
+        r = await client.get(DATAMUSE_API, params={"rel_" + rel: word, "max": 10}, timeout=8)
+        results = r.json()
+        if not results:
+            return ""
+        candidates = [
+            w["word"] for w in results
+            if " " not in w["word"] and 3 <= len(w["word"]) <= 10
+        ]
+        return candidates[0] if candidates else ""
+    except Exception:
+        return ""
+
+
+async def translate(text: str, client: httpx.AsyncClient, src="en", tgt="es") -> str:
+    if not text:
+        return ""
+    try:
+        r = await client.get(TRANS_API, params={"q": text, "langpair": f"{src}|{tgt}"}, timeout=8)
+        data = r.json()
+        translated = data["responseData"]["translatedText"]
+        # MyMemory sometimes returns the original if it can't translate
+        return translated if translated.lower() != text.lower() else ""
+    except Exception:
+        return ""
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.post("/api/words")
+async def add_word(req: WordRequest):
+    word = req.word.strip().lower()
+    if not word:
+        raise HTTPException(400, "La palabra no puede estar vacía")
+
+    words = load_words()
+    if any(w["word_en"].lower() == word for w in words):
+        raise HTTPException(409, "Esa palabra ya está en tu vocabulario")
+
+    async with httpx.AsyncClient() as client:
+        # 1. Dictionary lookup
+        d = await fetch_dictionary(word, client)
+
+        # 2. Synonyms/antonyms from Datamuse + translations in parallel
+        (
+            word_es, definition_es, example_es,
+            synonym_en, antonym_en,
+        ) = await asyncio.gather(
+            translate(d["word_en"], client),
+            translate(d["definition_en"], client),
+            translate(d["example_en"], client),
+            datamuse_word(d["word_en"], "syn", client),
+            datamuse_word(d["word_en"], "ant", client),
+        )
+
+        # 3. Translate synonym and antonym to Spanish
+        synonym_es, antonym_es = await asyncio.gather(
+            translate(synonym_en, client),
+            translate(antonym_en, client),
+        )
+
+        # 3. Build pronunciation strings
+        pronunciation_es = ipa_to_spanish(d["ipa"]) if d["ipa"] else ""
+
+        # For example sentence, build word-by-word phonetic hint (first 6 words)
+        example_pron = ""
+        if d["example_en"]:
+            ex_words = d["example_en"].split()[:8]
+            # Simple heuristic: just show the IPA if we have it for the main word,
+            # and note "pronunciación similar al español" for the phrase
+            example_pron = f'"{d["example_en"][:60]}…"' if len(d["example_en"]) > 60 else ""
+
+    data = {
+        "id":           str(uuid.uuid4()),
+        "created_at":   datetime.now().isoformat(),
+        "word_en":      d["word_en"],
+        "word_es":      word_es or word,
+        "type":         d["type"],
+        "ipa":          d["ipa"],
+        "pronunciation_es": pronunciation_es,
+        "synonym_en":   synonym_en,
+        "synonym_es":   synonym_es,
+        "antonym_en":   antonym_en,
+        "antonym_es":   antonym_es,
+        "definition_en": d["definition_en"],
+        "definition_es": definition_es,
+        "example_en":   d["example_en"],
+        "example_es":   example_es,
+        "times_practiced": 0,
+        "times_correct":   0,
+    }
+
+    words.append(data)
+    save_words(words)
+    return data
+
+
+@app.get("/api/words")
+async def get_words():
+    return load_words()
+
+
+@app.delete("/api/words/{word_id}")
+async def delete_word(word_id: str):
+    words = load_words()
+    new = [w for w in words if w["id"] != word_id]
+    if len(new) == len(words):
+        raise HTTPException(404, "Palabra no encontrada")
+    save_words(new)
+    return {"ok": True}
+
+
+@app.post("/api/validate")
+async def validate_sentence(req: ValidateRequest):
+    """
+    Simple heuristic validation:
+    - Word present in sentence: +40 pts
+    - Sentence has subject + verb structure: +30 pts
+    - Reasonable length (5-25 words): +20 pts
+    - Starts with capital, ends with punctuation: +10 pts
+    """
+    s = req.sentence.strip()
+    word = req.word_en.lower()
+    score = 0
+    issues = []
+
+    uses_word = word in s.lower()
+    if uses_word:
+        score += 40
+    else:
+        issues.append(f'no contiene la palabra "{word}"')
+
+    words_count = len(s.split())
+    if 5 <= words_count <= 30:
+        score += 20
+    elif words_count < 5:
+        issues.append("la oración es muy corta")
+    else:
+        issues.append("la oración es muy larga")
+
+    if s and s[0].isupper():
+        score += 5
+    if s and s[-1] in ".!?":
+        score += 5
+
+    has_verb = any(s.lower().split().__contains__(v) for v in
+                   ["is","are","was","were","have","has","had","do","does","did",
+                    "will","would","can","could","should","may","might","must",
+                    "seem","feel","look","go","make","take","get","know","think"])
+    if has_verb:
+        score += 30
+
+    correct = score >= 60
+    if correct:
+        feedback = f'¡Bien hecho! Tu oración usa "{word}" correctamente.'
+    else:
+        feedback = f'Intenta mejorar: {", ".join(issues) if issues else "revisa la gramática"}.'
+
+    return {
+        "correct": correct,
+        "score": min(score, 100),
+        "feedback_es": feedback,
+        "improved_en": None,
+        "uses_word_correctly": uses_word,
+    }
+
+
+@app.post("/api/quiz/check")
+async def check_quiz(req: QuizCheckRequest):
+    words = load_words()
+    word = next((w for w in words if w["id"] == req.word_id), None)
+    if not word:
+        raise HTTPException(404, "Palabra no encontrada")
+
+    user = req.answer.strip().lower()
+    if req.quiz_type == "es_to_en":
+        correct = word["word_en"].lower()
+        alt = word.get("synonym_en", "").lower()
+    else:
+        correct = word["word_es"].lower()
+        alt = word.get("synonym_es", "").lower()
+
+    is_correct = user == correct or bool(alt and user == alt)
+
+    for i, w in enumerate(words):
+        if w["id"] == req.word_id:
+            words[i]["times_practiced"] = w.get("times_practiced", 0) + 1
+            if is_correct:
+                words[i]["times_correct"] = w.get("times_correct", 0) + 1
+    save_words(words)
+
+    return {"correct": is_correct, "correct_answer": correct, "word": word}
+
+
+# ── Missing import ────────────────────────────────────────────────────────────
+import asyncio
+
+# ── Static frontend (must be last) ────────────────────────────────────────────
+_frontend = Path(__file__).parent.parent / "frontend"
+app.mount("/", StaticFiles(directory=str(_frontend), html=True), name="static")
