@@ -83,3 +83,52 @@ def test_phrase_only_eligible_for_mc_word_and_typing():
     all_words = [phrase] + [make_word(i) for i in range(2, 6)]
     elig = quiz.eligible_types(phrase, all_words, quiz.ALL_TYPES)
     assert set(elig) == {"mc_word", "typing"}
+
+
+# ── lang: alta bilingüe ──────────────────────────────────────────────
+
+def test_add_spanish_word_enriched_via_english_pipeline(client, mock_apis):
+    r = client.post("/api/words", json={"word": "Mariposa", "lang": "es"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["word_es"] == "mariposa"          # entrada original, no re-traducción
+    assert d["word_en"] == "tr(mariposa)"      # traducción ES→EN
+    assert d["type"] == "noun"                 # pipeline inglés corrió
+    assert mock_apis["dictionary"] == 1        # dictionary llamado con la traducción
+
+
+def test_add_spanish_phrase_inverted(client, mock_apis):
+    r = client.post("/api/words", json={"word": "romper el hielo", "lang": "es"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["type"] == "phrase"               # traducción multi-palabra → frase
+    assert d["word_en"] == "tr(romper el hielo)"
+    assert d["word_es"] == "romper el hielo"
+    assert mock_apis["dictionary"] == 0
+
+
+def test_add_spanish_translate_fails_400(client, monkeypatch):
+    import backend.main as main
+
+    async def empty_translate(text, client, src="en", tgt="es"):
+        return ""
+
+    monkeypatch.setattr(main, "translate", empty_translate)
+    r = client.post("/api/words", json={"word": "mariposa", "lang": "es"})
+    assert r.status_code == 400
+
+
+def test_dedup_by_word_es(client, mock_apis):
+    assert client.post("/api/words",
+                       json={"word": "hola", "lang": "es"}).status_code == 200
+    # segunda alta con la misma entrada española → 409 por word_es
+    assert client.post("/api/words",
+                       json={"word": "Hola", "lang": "es"}).status_code == 409
+
+
+def test_lang_invalid_422_and_default_en(client, mock_apis):
+    assert client.post("/api/words",
+                       json={"word": "strong", "lang": "fr"}).status_code == 422
+    r = client.post("/api/words", json={"word": "strong"})   # sin lang → EN
+    assert r.status_code == 200
+    assert mock_apis["dictionary"] == 1
