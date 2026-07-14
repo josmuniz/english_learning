@@ -183,3 +183,54 @@ backend/tests/test_words.py::test_phrase_only_eligible_for_mc_word_and_typing PA
 ### 3.5 Próximo paso
 
 Validación interactiva del usuario (responder un diálogo real disparado por launchd, probar "+ Agregar" con una frase nueva desde el diálogo) + revisión global de rama antes de merge. Follow-up pendiente de fase 1 (fuera de este plan): aplicar `esc()` en `renderWords()`.
+
+---
+
+## Paso 4 · Alta bilingüe ES/EN (2026-07-14)
+
+**Meta:** Implementar el diseño aprobado (spec `2026-07-14-alta-bilingue-design.md`): permitir agregar vocabulario partiendo de una palabra o frase en español (además de inglés), reutilizando el mismo pipeline de enriquecimiento.
+
+### 4.1 Qué se construyó
+
+- **Backend** (`backend/main.py`, `POST /api/words`): nuevo campo `lang: "en" | "es"` en `WordRequest` (default `"en"`, 422 si viene otro valor). Con `lang="es"`, la entrada se traduce primero ES→EN (`translate()`, dirección invertida) y el resultado alimenta el mismo pipeline que ya enriquecía palabras en inglés, ahora extraído a `_build_english_entry()` — evita duplicar la lógica de `dictionaryapi.dev` + Datamuse + `ipa_to_spanish` entre los dos caminos (en/es). El dedup (`test_dedup_by_word_es`) sigue bloqueando en ambos sentidos.
+- **Web** (`frontend/index.html`): toggle EN/ES en el formulario de alta con placeholder dinámico según el idioma elegido.
+- **Diálogo nativo** (`notifier/quiz_dialog.py`): paso de idioma (Español/Inglés) antes de pedir el texto en el flujo "+ Agregar"; `Cancelar` aborta sin llamar a `POST /api/words`.
+- **Tests:** 7 tests nuevos (40 → 47) — alta de palabra española vía pipeline inglés, alta de frase española invertida, fallo de traducción → 400, dedup por `word_es`, validación de `lang` inválido/default, y el flujo de diálogo con paso de idioma (confirmar Español y cancelar).
+
+### 4.2 Verificación — Step 1: suite completa
+
+Comando:
+```
+python3 -m pytest backend/tests/ -v
+```
+Output real (tail):
+```
+backend/tests/test_words.py::test_add_spanish_word_enriched_via_english_pipeline PASSED [ 91%]
+backend/tests/test_words.py::test_add_spanish_phrase_inverted PASSED     [ 93%]
+backend/tests/test_words.py::test_add_spanish_translate_fails_400 PASSED [ 95%]
+backend/tests/test_words.py::test_dedup_by_word_es PASSED                [ 97%]
+backend/tests/test_words.py::test_lang_invalid_422_and_default_en PASSED [100%]
+
+============================== 47 passed in 0.44s ==============================
+```
+
+### 4.3 Verificación — Step 2: criterios de éxito del spec §7 (automatizables)
+
+Con `./start.sh` corriendo en :8003 (launchd, KeepAlive):
+
+1. **Web con 🇪🇸, card rica:** `curl -s -X POST http://localhost:8003/api/words -H 'Content-Type: application/json' -d '{"word": "tiburón", "lang": "es"}'` → **409** (`"Esa palabra ya está en tu vocabulario"`) porque la verificación en navegador de Task 2 ya había agregado "tiburón" al vocabulario real — evidencia válida del criterio 4 (dedup), no del alta fresca. Para el alta fresca se usó una palabra distinta, `"ballena"`:
+   ```
+   curl -s -X POST http://localhost:8003/api/words -H 'Content-Type: application/json' -d '{"word": "ballena", "lang": "es"}' | python3 -m json.tool
+   ```
+   → `200`, `word_es: "ballena"`, `word_en: "whale"`, card rica (`type: "noun"`, `ipa: "/weɪl/"`, `definition_en`/`definition_es`, `example_en: "The whale was remarkable."`, `example_es: "La ballena era notable."`). Se deja en el vocabulario (indicado por el brief).
+2. **Duplicados bloqueados:** repetir el mismo POST de `"tiburón"` y luego de `"ballena"` → ambos **409** (`"Esa palabra ya está en tu vocabulario"`), confirmando dedup en el sentido español.
+3. **`lang` inválido → 422:** `curl -s -X POST http://localhost:8003/api/words -H 'Content-Type: application/json' -d '{"word": "strong", "lang": "fr"}'` → **422**, `{"detail": "lang inválido (en|es)"}`.
+4. **Diálogo nativo con paso de idioma** ("+ Agregar" → Español → "tiburón" → confirma `shark → tiburón`): criterio interactivo, no automatizable sin GUI real — pendiente validación del usuario.
+
+### 4.4 Archivos
+
+- **Modificados:** `backend/main.py` (`lang` en `WordRequest`, `_build_english_entry()` compartido, validación 422), `frontend/index.html` (toggle EN/ES + placeholder dinámico), `notifier/quiz_dialog.py` (paso de idioma en "+ Agregar"), `backend/tests/test_words.py`, `backend/tests/test_notifier.py`, `docs/ARCHITECTURE.md`, `docs/BITACORA.md`
+
+### 4.5 Próximo paso
+
+Validación interactiva del usuario (diálogo real "+ Agregar" → Español → palabra nueva) + revisión global de rama y de seguridad antes de merge a `main`. Follow-up pendiente de fase 1 (fuera de este plan): aplicar `esc()` en `renderWords()`.

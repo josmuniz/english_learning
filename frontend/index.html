@@ -197,6 +197,10 @@
       <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">Agregar palabra</h2>
       <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">Escribe una palabra o frase en inglés; se genera traducción y, para palabras, sinónimo y ejemplo.</p>
       <div style="display:flex; gap:12px; align-items:center;">
+        <div style="display:flex; gap:6px;">
+          <button class="btn-ghost" id="lang-en" onclick="setAddLang('en')" style="padding:8px 12px;">🇬🇧 EN</button>
+          <button class="btn-ghost" id="lang-es" onclick="setAddLang('es')" style="padding:8px 12px;">🇪🇸 ES</button>
+        </div>
         <input id="word-input" class="inp" type="text" placeholder="Ej: perseverance, break the ice…"
           style="flex:1;" onkeydown="if(event.key==='Enter') addWord()"/>
         <button id="add-btn" class="btn-primary" onclick="addWord()" style="white-space:nowrap; display:flex; align-items:center; gap:8px;">
@@ -389,7 +393,7 @@ const CONFIG_KEY = 'elearn_config';
 const DEFAULT_CFG = {
   intervalMin: 15, direction: 'both',
   types: ['mc_word', 'mc_phrase', 'cloze', 'typing'],
-  perInterrupt: 1, timerActive: false, timerEndsAt: null,
+  perInterrupt: 1, addLang: 'en', timerActive: false, timerEndsAt: null,
 };
 let cfg = loadConfig();
 
@@ -431,6 +435,7 @@ function applyConfigToUI() {
     document.getElementById(`type-${t}`).checked = cfg.types.includes(t);
   });
   document.getElementById('per-interrupt').value = String(cfg.perInterrupt);
+  setAddLang(cfg.addLang);
 }
 
 // Session state
@@ -594,7 +599,7 @@ async function addWord() {
     const res = await fetch(`${API}/api/words`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ word })
+      body: JSON.stringify({ word, lang: cfg.addLang })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Error al agregar');
@@ -635,6 +640,23 @@ function setQuizMode(mode) {
     el.style.color = m === mode ? 'var(--tag-txt)' : '';
     el.style.borderColor = m === mode ? 'var(--accent)' : '';
   });
+}
+
+const ADD_PLACEHOLDER = {
+  en: 'Ej: perseverance, break the ice…',
+  es: 'Ej: mariposa, romper el hielo…',
+};
+
+function setAddLang(l) {
+  cfg.addLang = l;
+  saveConfig();
+  ['en', 'es'].forEach(m => {
+    const el = document.getElementById(`lang-${m}`);
+    el.style.background = m === l ? 'var(--tag-bg)' : '';
+    el.style.color = m === l ? 'var(--tag-txt)' : '';
+    el.style.borderColor = m === l ? 'var(--accent)' : '';
+  });
+  document.getElementById('word-input').placeholder = ADD_PLACEHOLDER[l];
 }
 
 function updatePracticeSection() {

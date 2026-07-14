@@ -65,6 +65,7 @@ def save_words(words: list):
 
 class WordRequest(BaseModel):
     word: str
+    lang: str = "en"   # "en" | "es"
 
 class ValidateRequest(BaseModel):
     word_en: str
@@ -170,18 +171,27 @@ async def translate(text: str, client: httpx.AsyncClient, src="en", tgt="es") ->
         return ""
 
 
+# ── Helpers for add_word ─────────────────────────────────────────────────────
+
+def _is_duplicate(entry: str, words: list) -> bool:
+    return any(entry == w.get("word_en", "").lower()
+               or entry == w.get("word_es", "").lower()
+               for w in words)
+
+
 # ── Phrase helper ─────────────────────────────────────────────────────────────
 
-async def _add_phrase(phrase: str, words: list) -> dict:
-    """Camino frase: dictionaryapi no resuelve multi-palabra; solo se traduce."""
-    async with httpx.AsyncClient() as client:
-        phrase_es = await translate(phrase, client)
+async def _add_phrase(word_en: str, word_es: str | None, words: list) -> dict:
+    """Camino frase. word_es None → traducir EN→ES con fallback a la frase."""
+    if word_es is None:
+        async with httpx.AsyncClient() as client:
+            word_es = await translate(word_en, client)
 
     data = {
         "id":           str(uuid.uuid4()),
         "created_at":   datetime.now().isoformat(),
-        "word_en":      phrase,
-        "word_es":      phrase_es or phrase,
+        "word_en":      word_en,
+        "word_es":      word_es or word_en,
         "type":         "phrase",
         "ipa":          "",
         "pronunciation_es": "",
@@ -197,26 +207,14 @@ async def _add_phrase(phrase: str, words: list) -> dict:
     return data
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# ── English pipeline ─────────────────────────────────────────────────────────
 
-@app.post("/api/words")
-async def add_word(req: WordRequest):
-    word = req.word.strip().lower()
-    if not word:
-        raise HTTPException(400, "La palabra no puede estar vacía")
-    if len(word) > 80:
-        raise HTTPException(400, "Máximo 80 caracteres")
-
-    words = load_words()
-    if any(w["word_en"].lower() == word for w in words):
-        raise HTTPException(409, "Esa palabra ya está en tu vocabulario")
-
-    if " " in word:
-        return await _add_phrase(word, words)
-
+async def _build_english_entry(word_en: str, words: list,
+                               word_es_override: str | None = None) -> dict:
+    """Pipeline inglés completo (dictionary + datamuse + traducciones)."""
     async with httpx.AsyncClient() as client:
         # 1. Dictionary lookup
-        d = await fetch_dictionary(word, client)
+        d = await fetch_dictionary(word_en, client)
 
         # 2. Synonyms/antonyms from Datamuse + translations in parallel
         (
@@ -251,7 +249,7 @@ async def add_word(req: WordRequest):
         "id":           str(uuid.uuid4()),
         "created_at":   datetime.now().isoformat(),
         "word_en":      d["word_en"],
-        "word_es":      word_es or word,
+        "word_es":      word_es_override or word_es or word_en,
         "type":         d["type"],
         "ipa":          d["ipa"],
         "pronunciation_es": pronunciation_es,
@@ -270,6 +268,47 @@ async def add_word(req: WordRequest):
     words.append(data)
     save_words(words)
     return data
+
+
+# ── Spanish pipeline ───────────────────────────────────────────────────────────
+
+async def _add_from_spanish(entry_es: str, words: list) -> dict:
+    """Entrada en español: traducir a inglés y decidir camino por la forma del word_en."""
+    async with httpx.AsyncClient() as client:
+        translated = await translate(entry_es, client, src="es", tgt="en")
+    word_en = translated.strip().lower()
+    if not word_en:
+        raise HTTPException(400, "No se pudo traducir; intenta escribirla en inglés")
+    if any(word_en == w.get("word_en", "").lower() for w in words):
+        raise HTTPException(409, "Esa palabra ya está en tu vocabulario")
+
+    if " " in word_en:
+        return await _add_phrase(word_en, entry_es, words)
+    return await _build_english_entry(word_en, words, word_es_override=entry_es)
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.post("/api/words")
+async def add_word(req: WordRequest):
+    if req.lang not in ("en", "es"):
+        raise HTTPException(422, "lang inválido (en|es)")
+    word = req.word.strip().lower()
+    if not word:
+        raise HTTPException(400, "La palabra no puede estar vacía")
+    if len(word) > 80:
+        raise HTTPException(400, "Máximo 80 caracteres")
+
+    words = load_words()
+    if _is_duplicate(word, words):
+        raise HTTPException(409, "Esa palabra ya está en tu vocabulario")
+
+    if req.lang == "es":
+        return await _add_from_spanish(word, words)
+
+    if " " in word:
+        return await _add_phrase(word, None, words)
+    return await _build_english_entry(word, words)
 
 
 @app.get("/api/words")

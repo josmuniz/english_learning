@@ -17,7 +17,7 @@ App local de vocabulario inglés→español. Una sola página HTML consume una A
 ## Flujo de datos
 
 ```
-Usuario escribe palabra
+Usuario escribe palabra o frase (EN o ES — selector; entrada ES se traduce primero ES→EN)
   → POST backend
       → dictionaryapi.dev  (definición, IPA, ejemplos)
       → mymemory.translated.net (traducción EN→ES)
