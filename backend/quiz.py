@@ -24,3 +24,15 @@ def is_match(answer: str, expected: str, synonym: str = "") -> bool:
     if a == normalize(expected):
         return True
     return bool(synonym.strip()) and a == normalize(synonym)
+
+
+def word_weight(w: dict) -> float:
+    tp = w.get("times_practiced", 0)
+    if tp == 0:
+        return 3.0
+    return 1.0 + 4.0 * (1 - w.get("times_correct", 0) / tp)
+
+
+def pick_word(words: list, rng=random) -> dict:
+    weights = [word_weight(w) for w in words]
+    return rng.choices(words, weights=weights, k=1)[0]
