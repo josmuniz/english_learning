@@ -174,14 +174,14 @@ async def translate(text: str, client: httpx.AsyncClient, src="en", tgt="es") ->
 # ── Helpers for add_word ─────────────────────────────────────────────────────
 
 def _is_duplicate(entry: str, words: list) -> bool:
-    return any(entry == w["word_en"].lower()
+    return any(entry == w.get("word_en", "").lower()
                or entry == w.get("word_es", "").lower()
                for w in words)
 
 
 # ── Phrase helper ─────────────────────────────────────────────────────────────
 
-async def _add_phrase(word_en: str, word_es, words: list) -> dict:
+async def _add_phrase(word_en: str, word_es: str | None, words: list) -> dict:
     """Camino frase. word_es None → traducir EN→ES con fallback a la frase."""
     if word_es is None:
         async with httpx.AsyncClient() as client:
@@ -279,7 +279,7 @@ async def _add_from_spanish(entry_es: str, words: list) -> dict:
     word_en = translated.strip().lower()
     if not word_en:
         raise HTTPException(400, "No se pudo traducir; intenta escribirla en inglés")
-    if any(word_en == w["word_en"].lower() for w in words):
+    if any(word_en == w.get("word_en", "").lower() for w in words):
         raise HTTPException(409, "Esa palabra ya está en tu vocabulario")
 
     if " " in word_en:
