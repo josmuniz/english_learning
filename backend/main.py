@@ -170,6 +170,33 @@ async def translate(text: str, client: httpx.AsyncClient, src="en", tgt="es") ->
         return ""
 
 
+# ── Phrase helper ─────────────────────────────────────────────────────────────
+
+async def _add_phrase(phrase: str, words: list) -> dict:
+    """Camino frase: dictionaryapi no resuelve multi-palabra; solo se traduce."""
+    async with httpx.AsyncClient() as client:
+        phrase_es = await translate(phrase, client)
+
+    data = {
+        "id":           str(uuid.uuid4()),
+        "created_at":   datetime.now().isoformat(),
+        "word_en":      phrase,
+        "word_es":      phrase_es or phrase,
+        "type":         "phrase",
+        "ipa":          "",
+        "pronunciation_es": "",
+        "synonym_en":   "", "synonym_es": "",
+        "antonym_en":   "", "antonym_es": "",
+        "definition_en": "", "definition_es": "",
+        "example_en":   "", "example_es": "",
+        "times_practiced": 0,
+        "times_correct":   0,
+    }
+    words.append(data)
+    save_words(words)
+    return data
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.post("/api/words")
@@ -177,10 +204,15 @@ async def add_word(req: WordRequest):
     word = req.word.strip().lower()
     if not word:
         raise HTTPException(400, "La palabra no puede estar vacía")
+    if len(word) > 80:
+        raise HTTPException(400, "Máximo 80 caracteres")
 
     words = load_words()
     if any(w["word_en"].lower() == word for w in words):
         raise HTTPException(409, "Esa palabra ya está en tu vocabulario")
+
+    if " " in word:
+        return await _add_phrase(word, words)
 
     async with httpx.AsyncClient() as client:
         # 1. Dictionary lookup
