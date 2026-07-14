@@ -329,6 +329,10 @@ async def quiz_next(types: str = "mc_word,mc_phrase,cloze,typing",
 
 @app.post("/api/quiz/answer")
 async def quiz_answer(req: QuizAnswerRequest):
+    if req.type not in quiz_engine.ALL_TYPES:
+        raise HTTPException(422, "type inválido")
+    if req.direction not in ("es_to_en", "en_to_es"):
+        raise HTTPException(422, "direction inválida")
     words = load_words()
     word = next((w for w in words if w["id"] == req.word_id), None)
     if not word:

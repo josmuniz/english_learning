@@ -217,3 +217,15 @@ def test_quiz_answer_unknown_word_404(client):
         "word_id": "nope", "type": "typing",
         "direction": "en_to_es", "answer": "x"})
     assert r.status_code == 404
+
+
+def test_quiz_answer_invalid_type_and_direction_422(client):
+    base = {"word_id": "id-1", "answer": "palabra1"}
+    r1 = client.post("/api/quiz/answer", json={**base, "type": "foo", "direction": "en_to_es"})
+    assert r1.status_code == 422
+    r2 = client.post("/api/quiz/answer", json={**base, "type": "typing", "direction": "both"})
+    assert r2.status_code == 422
+
+
+def test_quiz_next_invalid_direction_422(client):
+    assert client.get("/api/quiz/next?direction=sideways").status_code == 422
