@@ -1,11 +1,13 @@
 import json
 import uuid
 import re
+import asyncio
 import httpx
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from backend import quiz as quiz_engine
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -68,9 +70,10 @@ class ValidateRequest(BaseModel):
     word_en: str
     sentence: str
 
-class QuizCheckRequest(BaseModel):
+class QuizAnswerRequest(BaseModel):
     word_id: str
-    quiz_type: str   # "es_to_en" | "en_to_es"
+    type: str        # mc_word | mc_phrase | cloze | typing
+    direction: str   # es_to_en | en_to_es
     answer: str
 
 
@@ -307,35 +310,42 @@ async def validate_sentence(req: ValidateRequest):
     }
 
 
-@app.post("/api/quiz/check")
-async def check_quiz(req: QuizCheckRequest):
+@app.get("/api/quiz/next")
+async def quiz_next(types: str = "mc_word,mc_phrase,cloze,typing",
+                    direction: str = "both"):
+    requested = [t.strip() for t in types.split(",")
+                 if t.strip() in quiz_engine.ALL_TYPES]
+    if not requested:
+        raise HTTPException(422, "types no contiene ningún tipo válido")
+    if direction not in ("es_to_en", "en_to_es", "both"):
+        raise HTTPException(422, "direction inválida")
+    words = load_words()
+    if not words:
+        raise HTTPException(404, "El vocabulario está vacío")
+    word = quiz_engine.pick_word(words)
+    qtype = quiz_engine.choose_type(word, words, requested)
+    return quiz_engine.build_question(word, qtype, direction, words)
+
+
+@app.post("/api/quiz/answer")
+async def quiz_answer(req: QuizAnswerRequest):
     words = load_words()
     word = next((w for w in words if w["id"] == req.word_id), None)
     if not word:
         raise HTTPException(404, "Palabra no encontrada")
 
-    user = req.answer.strip().lower()
-    if req.quiz_type == "es_to_en":
-        correct = word["word_en"].lower()
-        alt = word.get("synonym_en", "").lower()
-    else:
-        correct = word["word_es"].lower()
-        alt = word.get("synonym_es", "").lower()
+    expected, synonym = quiz_engine.expected_answer(word, req.type, req.direction)
+    is_correct = quiz_engine.is_match(req.answer, expected, synonym)
 
-    is_correct = user == correct or bool(alt and user == alt)
-
-    for i, w in enumerate(words):
+    for w in words:
         if w["id"] == req.word_id:
-            words[i]["times_practiced"] = w.get("times_practiced", 0) + 1
+            w["times_practiced"] = w.get("times_practiced", 0) + 1
             if is_correct:
-                words[i]["times_correct"] = w.get("times_correct", 0) + 1
+                w["times_correct"] = w.get("times_correct", 0) + 1
     save_words(words)
 
-    return {"correct": is_correct, "correct_answer": correct, "word": word}
+    return {"correct": is_correct, "correct_answer": expected, "word": word}
 
-
-# ── Missing import ────────────────────────────────────────────────────────────
-import asyncio
 
 # ── Static frontend (must be last) ────────────────────────────────────────────
 _frontend = Path(__file__).parent.parent / "frontend"

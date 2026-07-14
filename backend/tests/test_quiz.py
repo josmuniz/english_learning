@@ -150,3 +150,70 @@ def test_both_resolves_to_concrete_direction():
     words = [make_word(i) for i in range(1, 6)]
     q = quiz.build_question(words[0], "mc_word", "both", words, random.Random(1))
     assert q["direction"] in ("es_to_en", "en_to_es")
+
+
+# ── API ──────────────────────────────────────────────────────────────
+
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    import backend.main as main
+    data_file = tmp_path / "words.json"
+    data_file.write_text(
+        json.dumps([make_word(i) for i in range(1, 6)]), encoding="utf-8")
+    monkeypatch.setattr(main, "DATA_FILE", data_file)
+    return TestClient(main.app)
+
+
+def test_quiz_next_returns_question(client):
+    r = client.get("/api/quiz/next?types=mc_word&direction=en_to_es")
+    assert r.status_code == 200
+    q = r.json()
+    assert q["type"] == "mc_word"
+    assert len(q["options"]) == 4
+    assert "correct_answer" not in q
+
+
+def test_quiz_next_empty_vocab_404(tmp_path, monkeypatch):
+    import backend.main as main
+    data_file = tmp_path / "words.json"
+    data_file.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(main, "DATA_FILE", data_file)
+    r = TestClient(main.app).get("/api/quiz/next")
+    assert r.status_code == 404
+
+
+def test_quiz_next_invalid_types_422(client):
+    assert client.get("/api/quiz/next?types=foo,bar").status_code == 422
+
+
+def test_quiz_answer_updates_stats(client, tmp_path):
+    body = {"word_id": "id-1", "type": "mc_word",
+            "direction": "en_to_es", "answer": "palabra1"}
+    r = client.post("/api/quiz/answer", json=body)
+    assert r.status_code == 200
+    assert r.json()["correct"] is True
+    saved = json.loads((tmp_path / "words.json").read_text(encoding="utf-8"))
+    w1 = next(w for w in saved if w["id"] == "id-1")
+    assert w1["times_practiced"] == 1 and w1["times_correct"] == 1
+
+
+def test_quiz_answer_tolerant_and_wrong(client):
+    ok = client.post("/api/quiz/answer", json={
+        "word_id": "id-1", "type": "typing",
+        "direction": "en_to_es", "answer": "  La PALABRA1 "})
+    assert ok.json()["correct"] is True
+    bad = client.post("/api/quiz/answer", json={
+        "word_id": "id-1", "type": "typing",
+        "direction": "en_to_es", "answer": "otra cosa"})
+    assert bad.json()["correct"] is False
+    assert bad.json()["correct_answer"] == "palabra1"
+
+
+def test_quiz_answer_unknown_word_404(client):
+    r = client.post("/api/quiz/answer", json={
+        "word_id": "nope", "type": "typing",
+        "direction": "en_to_es", "answer": "x"})
+    assert r.status_code == 404
