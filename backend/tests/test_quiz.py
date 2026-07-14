@@ -107,3 +107,46 @@ def test_small_vocab_degrades_to_typing():
     words = [make_word(i) for i in range(1, 4)]  # solo 3 palabras
     assert quiz.eligible_types(words[0], words, ["mc_word"]) == []
     assert quiz.choose_type(words[0], words, ["mc_word"], random) == "typing"
+
+
+# ── build_question ───────────────────────────────────────────────────
+
+def test_mc_word_has_4_unique_options_including_answer():
+    words = [make_word(i) for i in range(1, 6)]
+    q = quiz.build_question(words[0], "mc_word", "en_to_es", words, random.Random(1))
+    assert q["type"] == "mc_word"
+    assert q["direction"] == "en_to_es"
+    assert q["prompt"] == "word1"
+    assert q["prompt_secondary"] == "(pron1)"
+    assert len(q["options"]) == 4 == len(set(q["options"]))
+    assert "palabra1" in q["options"]
+    assert "correct" not in q and "correct_answer" not in q
+
+
+def test_cloze_hides_word_and_ignores_direction():
+    words = [make_word(i) for i in range(1, 6)]
+    q = quiz.build_question(words[0], "cloze", "en_to_es", words, random.Random(1))
+    assert "____" in q["prompt"]
+    assert "word1" not in q["prompt"].lower()
+    assert "word1" in q["options"]
+    assert q["direction"] == "es_to_en"
+
+
+def test_mc_phrase_respects_direction():
+    words = [make_word(i) for i in range(1, 6)]
+    q = quiz.build_question(words[0], "mc_phrase", "es_to_en", words, random.Random(1))
+    assert q["prompt"] == "Esta es palabra1 en una frase."
+    assert "This is word1 in a sentence." in q["options"]
+
+
+def test_typing_has_no_options():
+    words = [make_word(i) for i in range(1, 6)]
+    q = quiz.build_question(words[0], "typing", "es_to_en", words, random.Random(1))
+    assert q["prompt"] == "palabra1"
+    assert "options" not in q
+
+
+def test_both_resolves_to_concrete_direction():
+    words = [make_word(i) for i in range(1, 6)]
+    q = quiz.build_question(words[0], "mc_word", "both", words, random.Random(1))
+    assert q["direction"] in ("es_to_en", "en_to_es")
