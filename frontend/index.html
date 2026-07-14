@@ -195,9 +195,9 @@
     <!-- Add word -->
     <div class="card" style="padding:24px; margin-bottom:24px;" id="add-card">
       <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">Agregar palabra</h2>
-      <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">Escribe en inglés y Claude generará el significado, sinónimo y frase de ejemplo.</p>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">Escribe una palabra o frase en inglés; se genera traducción y, para palabras, sinónimo y ejemplo.</p>
       <div style="display:flex; gap:12px; align-items:center;">
-        <input id="word-input" class="inp" type="text" placeholder="Ej: perseverance, resilient, endeavor…"
+        <input id="word-input" class="inp" type="text" placeholder="Ej: perseverance, break the ice…"
           style="flex:1;" onkeydown="if(event.key==='Enter') addWord()"/>
         <button id="add-btn" class="btn-primary" onclick="addWord()" style="white-space:nowrap; display:flex; align-items:center; gap:8px;">
           <span id="add-btn-text">+ Agregar</span>
