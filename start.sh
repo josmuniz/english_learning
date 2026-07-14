@@ -8,6 +8,6 @@ echo "🟢 English Learning App → http://localhost:8003"
 # on PATH (respects venvs), but fall back to the anaconda install that has
 # the deps when the default interpreter can't import uvicorn.
 PYTHON_BIN="$(command -v python3)"
-"$PYTHON_BIN" -c "import uvicorn" >/dev/null 2>&1 || PYTHON_BIN="/opt/anaconda3/bin/python3"
+"$PYTHON_BIN" -c "import uvicorn, fastapi" >/dev/null 2>&1 || PYTHON_BIN="/opt/anaconda3/bin/python3"
 
 exec "$PYTHON_BIN" -m uvicorn backend.main:app --port 8003 --reload
