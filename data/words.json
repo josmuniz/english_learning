@@ -15,8 +15,8 @@
     "definition_es": "Alguien que es guapa. Se puede utilizar como un término de dirección.",
     "example_en": "Hey, beautiful!",
     "example_es": "¡Hola, hermosa! ",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 3,
+    "times_correct": 2
   },
   {
     "id": "dabf478f-4056-4395-9fe3-28e30f2669ab",
@@ -34,8 +34,8 @@
     "definition_es": "Un evento feliz, cosa, persona, etc.",
     "example_en": "Music makes me feel happy.",
     "example_es": "La música me hace sentir feliz.",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 5,
+    "times_correct": 4
   },
   {
     "id": "f16bcad1-082a-45b2-bf7a-4133d0ca853b",
@@ -53,27 +53,8 @@
     "definition_es": "Capaz de producir una gran fuerza física.",
     "example_en": "a big strong man; Jake was tall and strong",
     "example_es": "un hombre grande y fuerte; Jake era alto y fuerte",
-    "times_practiced": 0,
-    "times_correct": 0
-  },
-  {
-    "id": "79397fc4-bee8-4949-8e4b-7c80252306eb",
-    "created_at": "2026-05-14T12:40:18.030484",
-    "word_en": "house",
-    "word_es": "albergar",
-    "type": "noun",
-    "ipa": "/hʌʊs/",
-    "pronunciation_es": "jaus",
-    "synonym_en": "firm",
-    "synonym_es": "firme",
-    "antonym_en": "",
-    "antonym_es": "",
-    "definition_en": "A structure built or serving as an abode of human beings.",
-    "definition_es": "Una estructura construida o que sirve como morada de seres humanos.",
-    "example_en": "This is my house and my family's ancestral home.",
-    "example_es": "Esta es mi casa y el hogar ancestral de mi familia.",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 7,
+    "times_correct": 6
   },
   {
     "id": "6c18b583-ef8f-43a3-8222-f5c9ef8ef9c7",
@@ -91,6 +72,25 @@
     "definition_es": "Un acto de pensar; consideración (de algo).",
     "example_en": "I'll have a think about that and let you know.",
     "example_es": "Lo pensaré y te lo haré saber.",
+    "times_practiced": 5,
+    "times_correct": 4
+  },
+  {
+    "id": "ce5022be-c0e3-4816-8f45-6835e0960735",
+    "created_at": "2026-07-14T16:19:33.228857",
+    "word_en": "see you later",
+    "word_es": "¡hasta luego",
+    "type": "phrase",
+    "ipa": "",
+    "pronunciation_es": "",
+    "synonym_en": "",
+    "synonym_es": "",
+    "antonym_en": "",
+    "antonym_es": "",
+    "definition_en": "",
+    "definition_es": "",
+    "example_en": "",
+    "example_es": "",
     "times_practiced": 0,
     "times_correct": 0
   }
