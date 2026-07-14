@@ -42,6 +42,8 @@ def build_question_dialog(q) -> str:
     header = f"{question_label(q)}\n\n{q['prompt']}"
     if q.get("prompt_secondary"):
         header += f"  {q['prompt_secondary']}"
+    if q.get("hint"):
+        header += f"\n(Tipo: {q['hint']})"
     header = applescript_escape(header)
     if q.get("options"):
         items = ", ".join(f'"{applescript_escape(o)}"' for o in q["options"])

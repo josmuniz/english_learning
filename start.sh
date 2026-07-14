@@ -3,6 +3,11 @@ cd "$(dirname "$0")"
 export $(cat .env | xargs)
 echo "🟢 English Learning App → http://localhost:8003"
 
+if curl -sf -m 2 http://localhost:8003/api/words >/dev/null 2>&1; then
+  echo "Backend ya corriendo en :8003 — nada que hacer"
+  exit 0
+fi
+
 # launchd runs with a minimal PATH that resolves "python3" to Apple's system
 # interpreter, which lacks uvicorn/fastapi. Prefer whatever python3 is first
 # on PATH (respects venvs), but fall back to the anaconda install that has

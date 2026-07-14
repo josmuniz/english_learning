@@ -17,6 +17,7 @@ def test_build_question_dialog_mc():
     assert '"fuerte"' in s and 'feliz \\"x\\"' in s
     assert "¿Qué significa en español?" in s
     assert "(strang)" in s
+    assert "(Tipo: adjective)" in s
 
 
 def test_build_question_dialog_typing():

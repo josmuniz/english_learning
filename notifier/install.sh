@@ -19,11 +19,11 @@ if [[ "${1:-}" == "--uninstall" ]]; then
 fi
 
 MINUTES="${1:-5}"
-if ! [[ "$MINUTES" =~ ^[0-9]+$ ]] || (( MINUTES < 1 || MINUTES > 120 )); then
+if ! [[ "$MINUTES" =~ ^[0-9]+$ ]] || (( 10#$MINUTES < 1 || 10#$MINUTES > 120 )); then
   echo "Uso: $0 [minutos 1-120] | --uninstall" >&2
   exit 1
 fi
-INTERVAL=$(( MINUTES * 60 ))
+INTERVAL=$(( 10#$MINUTES * 60 ))
 
 mkdir -p "$AGENTS_DIR" "$HOME/Library/Logs"
 
