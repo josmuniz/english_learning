@@ -65,6 +65,12 @@ def build_result_dialog(res) -> str:
             f'with title "{TITLE}" giving up after 60')
 
 
+def build_add_lang_dialog() -> str:
+    return ('display dialog "¿En qué idioma vas a escribir?" '
+            'buttons {"Cancelar", "Español", "Inglés"} default button "Inglés" '
+            f'with title "{TITLE}" giving up after 60')
+
+
 def build_add_dialog() -> str:
     return ('display dialog "Nueva palabra o frase en inglés:" default answer "" '
             'buttons {"Cancelar", "Agregar"} default button "Agregar" '
@@ -132,12 +138,17 @@ def acquire_lock() -> bool:
 # ── Orquestación ──────────────────────────────────────────────────────
 
 def offer_add_word():
+    lang_out = parse_dialog_output(run_osascript(build_add_lang_dialog()))
+    if lang_out["action"] != "button":
+        return
+    lang = "es" if lang_out["button"] == "Español" else "en"
+
     out = parse_dialog_output(run_osascript(build_add_dialog()))
     entry = (out.get("text") or "").strip() if out["action"] == "button" else ""
     if not entry:
         return
     try:
-        created = api("POST", "/api/words", {"word": entry})
+        created = api("POST", "/api/words", {"word": entry, "lang": lang})
         run_osascript(build_info_dialog(f"✓ {created['word_en']} → {created['word_es']}"))
         log("added", entry)
     except urllib.error.HTTPError as e:

@@ -120,6 +120,33 @@ def test_main_skip_does_not_post(sandbox, monkeypatch):
     assert api_calls == ["/api/quiz/next"]
 
 
+def test_build_add_lang_dialog():
+    s = nd.build_add_lang_dialog()
+    assert '"Cancelar", "Español", "Inglés"' in s
+    assert 'default button "Inglés"' in s and "giving up after 60" in s
+
+
+def test_add_word_lang_cancel_aborts(sandbox, monkeypatch):
+    api_calls = []
+
+    def fake_api(method, path, body=None):
+        api_calls.append((method, path, body))
+        if path == "/api/quiz/next":
+            return {"word_id": "id-1", "type": "typing", "direction": "es_to_en",
+                    "prompt": "palabra1", "prompt_secondary": "", "hint": "noun"}
+        return {"correct": True, "correct_answer": "word1", "word": {}}
+
+    outputs = iter([
+        "button returned:Responder, text returned:word1",   # pregunta
+        "button returned:+ Agregar, gave up:false",          # resultado
+        "button returned:Cancelar",                          # idioma → cancela
+    ])
+    monkeypatch.setattr(nd, "api", fake_api)
+    monkeypatch.setattr(nd, "run_osascript", lambda s: next(outputs))
+    assert nd.main() == 0
+    assert not any(p == "/api/words" for _, p, _ in api_calls)
+
+
 def test_add_word_flow(sandbox, monkeypatch):
     api_calls = []
 
@@ -135,10 +162,11 @@ def test_add_word_flow(sandbox, monkeypatch):
     outputs = iter([
         "button returned:Responder, text returned:word1",      # pregunta typing
         "button returned:+ Agregar, gave up:false",             # resultado
+        "button returned:Español",                              # idioma
         "button returned:Agregar, text returned:break the ice", # alta
         "button returned:OK",                                   # confirmación
     ])
     monkeypatch.setattr(nd, "api", fake_api)
     monkeypatch.setattr(nd, "run_osascript", lambda s: next(outputs))
     assert nd.main() == 0
-    assert ("POST", "/api/words", {"word": "break the ice"}) in api_calls
+    assert ("POST", "/api/words", {"word": "break the ice", "lang": "es"}) in api_calls
