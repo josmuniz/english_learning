@@ -1,0 +1,26 @@
+"""Motor de quiz: puro, sin I/O. Consumido por main.py y por los tests."""
+import random
+import re
+import unicodedata
+
+ALL_TYPES = ["mc_word", "mc_phrase", "cloze", "typing"]
+
+_ARTICLES = re.compile(r"^(el|la|los|las|un|una|unos|unas|the|a|an)\s+", re.IGNORECASE)
+
+
+def normalize(text: str) -> str:
+    s = text.strip().lower()
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = _ARTICLES.sub("", s)
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def is_match(answer: str, expected: str, synonym: str = "") -> bool:
+    a = normalize(answer)
+    if not a:
+        return False
+    if a == normalize(expected):
+        return True
+    return bool(synonym.strip()) and a == normalize(synonym)
