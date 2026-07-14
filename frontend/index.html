@@ -758,7 +758,12 @@ async function sendAnswer(q, answer) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ word_id: q.word_id, type: q.type, direction: q.direction, answer }),
   });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Error al validar la respuesta');
   return res.json();
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 const PROMPT_LABEL = {
@@ -776,15 +781,15 @@ function renderQuestion(q, container, onDone) {
     <p style="font-size:12px; color:var(--muted); margin-bottom:8px;">${label}
       <span class="badge badge-green" style="margin-left:6px;">${q.direction === 'es_to_en' ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸'}</span></p>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
-      <p style="font-size:${promptSize}px; font-weight:700; color:var(--accent); margin:0;">${q.prompt}</p>
+      <p style="font-size:${promptSize}px; font-weight:700; color:var(--accent); margin:0;">${esc(q.prompt)}</p>
       <button class="speak-btn" onclick="speak(${JSON.stringify(q.prompt).replace(/"/g,'&quot;')}, '${speakLang}', null)" title="Escuchar">🔊</button>
     </div>
-    ${q.prompt_secondary ? `<p class="pronunciation">${q.prompt_secondary}</p>` : ''}
-    <p style="font-size:12px; color:var(--faint); font-style:italic; margin-bottom:14px;">Tipo: ${q.hint}</p>`;
+    ${q.prompt_secondary ? `<p class="pronunciation">${esc(q.prompt_secondary)}</p>` : ''}
+    <p style="font-size:12px; color:var(--faint); font-style:italic; margin-bottom:14px;">Tipo: ${esc(q.hint)}</p>`;
 
   if (q.options) {
     html += `<div style="display:grid; gap:8px;">` + q.options.map(o =>
-      `<button class="btn-ghost qopt" style="text-align:left;" onclick="answerFromUI(this, ${JSON.stringify(o).replace(/"/g,'&quot;')})">${o}</button>`
+      `<button class="btn-ghost qopt" style="text-align:left;" onclick="answerFromUI(this, ${JSON.stringify(o).replace(/"/g,'&quot;')})">${esc(o)}</button>`
     ).join('') + `</div>`;
   } else {
     html += `
@@ -801,11 +806,18 @@ function renderQuestion(q, container, onDone) {
   window.answerFromUI = async (btnEl, answer) => {
     if (!answer || !answer.trim()) return;
     container.querySelectorAll('button.qopt, .btn-primary, #q-typing-input').forEach(el => el.disabled = true);
-    const data = await sendAnswer(q, answer.trim());
+    let data;
+    try {
+      data = await sendAnswer(q, answer.trim());
+    } catch (e) {
+      toast(e.message, 'error');
+      container.querySelectorAll('button.qopt, .btn-primary, #q-typing-input').forEach(el => el.disabled = false);
+      return;
+    }
     const fb = container.querySelector('#q-feedback');
     fb.innerHTML = data.correct
-      ? `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:10px 14px;">✅ <strong style="color:var(--green);">¡Correcto!</strong> <span style="font-size:12px;color:var(--muted);">${data.correct_answer}</span></div>`
-      : `<div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:8px;padding:10px 14px;">❌ <strong style="color:var(--red);">Incorrecto.</strong> <span style="font-size:12px;color:var(--muted);">Era: <strong style="color:var(--text);">${data.correct_answer}</strong></span></div>`;
+      ? `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:10px 14px;">✅ <strong style="color:var(--green);">¡Correcto!</strong> <span style="font-size:12px;color:var(--muted);">${esc(data.correct_answer)}</span></div>`
+      : `<div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:8px;padding:10px 14px;">❌ <strong style="color:var(--red);">Incorrecto.</strong> <span style="font-size:12px;color:var(--muted);">Era: <strong style="color:var(--text);">${esc(data.correct_answer)}</strong></span></div>`;
     if (btnEl) btnEl.style.borderColor = data.correct ? 'var(--green)' : 'var(--red)';
     onDone(data);
   };
