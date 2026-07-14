@@ -701,6 +701,14 @@ function tickTimer() {
 }
 
 function fireTimerAlert() {
+  const sessionActive =
+    document.getElementById('practice-session').style.display !== 'none' &&
+    document.getElementById('session-summary').style.display === 'none';
+  if (sessionActive) {
+    toast('🎯 Ya estás practicando — timer rearmado', 'info');
+    rearmTimer();
+    return;
+  }
   toast('🎯 ¡Es hora de practicar!', 'success');
   if (Notification.permission === 'granted' && document.hidden) {
     const n = new Notification('English Learning', {
@@ -861,13 +869,19 @@ async function loadQuestion() {
   document.getElementById('step-next').style.display = 'none';
   document.getElementById('step-flashcard').style.display = '';
 
-  const q = await fetchNextQuestion();
-  renderQuestion(q, document.getElementById('session-question'), (data) => {
-    currentAnswerWord = data.word;
-    if (data.correct) { sessionCorrect++; showSentenceStep(); }
-    else { sessionWrong++; document.getElementById('step-next').style.display = ''; }
-    document.getElementById('session-score-text').textContent = `✓ ${sessionCorrect} · ✗ ${sessionWrong}`;
-  });
+  try {
+    const q = await fetchNextQuestion();
+    renderQuestion(q, document.getElementById('session-question'), (data) => {
+      currentAnswerWord = data.word;
+      if (data.correct) { sessionCorrect++; showSentenceStep(); }
+      else { sessionWrong++; document.getElementById('step-next').style.display = ''; }
+      document.getElementById('session-score-text').textContent = `✓ ${sessionCorrect} · ✗ ${sessionWrong}`;
+    });
+  } catch (e) {
+    document.getElementById('session-question').innerHTML =
+      `<p style="color:var(--red); font-size:13px;">${esc(e.message)}</p>
+       <div style="margin-top:12px;"><button class="btn-ghost" onclick="loadQuestion()">Reintentar</button></div>`;
+  }
 }
 
 function showSentenceStep() {
