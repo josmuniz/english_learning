@@ -310,30 +310,10 @@
 
       <!-- STEP 1: Flashcard -->
       <div id="step-flashcard" class="card" style="padding:0; overflow:hidden;">
-        <div style="padding:12px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px;">
-          <span style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">Flashcard</span>
-          <span id="quiz-direction-badge" class="badge badge-green"></span>
+        <div style="padding:12px 20px; border-bottom:1px solid var(--border);">
+          <span style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">Pregunta</span>
         </div>
-        <div class="flashcard">
-          <p style="font-size:12px; color:var(--muted); margin-bottom:12px;" id="flashcard-prompt"></p>
-          <div style="display:flex; align-items:center; gap:12px; justify-content:center; margin-bottom:6px;">
-            <p style="font-size:36px; font-weight:700; color:var(--accent); margin:0;" id="flashcard-word"></p>
-            <button class="speak-btn" id="spk-flashcard" style="font-size:18px; padding:5px 10px;" onclick="speakFlashcard()" title="Escuchar">🔊</button>
-          </div>
-          <p class="pronunciation" id="flashcard-pronunciation" style="margin-bottom:6px;"></p>
-          <p style="font-size:13px; color:var(--faint); font-style:italic;" id="flashcard-hint"></p>
-        </div>
-        <div style="padding:20px; border-top:1px solid var(--border);">
-          <div style="display:flex; gap:12px; align-items:center;">
-            <input id="quiz-input" class="inp" type="text" placeholder="Tu respuesta en inglés…"
-              onkeydown="if(event.key==='Enter') submitQuizAnswer()"/>
-            <button class="btn-primary" onclick="submitQuizAnswer()" id="quiz-submit-btn" style="white-space:nowrap; display:flex; align-items:center; gap:8px;">
-              Verificar
-              <span id="quiz-spinner" class="spinner" style="display:none;"></span>
-            </button>
-          </div>
-          <div id="quiz-result" style="margin-top:16px; display:none;"></div>
-        </div>
+        <div id="session-question" style="padding:24px;"></div>
       </div>
 
       <!-- STEP 2: Sentence building (hidden) -->
@@ -454,12 +434,11 @@ function applyConfigToUI() {
 }
 
 // Session state
-let sessionWords = [];
+let sessionWords = 0;
 let sessionIdx = 0;
 let sessionCorrect = 0;
 let sessionWrong = 0;
-let currentWord = null;
-let currentQuizType = null;
+let currentAnswerWord = null;
 
 // ── Theme ──────────────────────────────────────────────────────────
 function toggleTheme() {
@@ -862,111 +841,40 @@ function closeQuizModal() {
 }
 
 // ── Practice session ───────────────────────────────────────────────
-function shuffle(arr) { return [...arr].sort(() => Math.random() - .5); }
-
 function startPractice() {
   if (allWords.length === 0) return;
-
-  // Pick up to 5 random words
-  sessionWords = shuffle(allWords).slice(0, Math.min(5, allWords.length));
-  sessionIdx = 0;
-  sessionCorrect = 0;
-  sessionWrong = 0;
-
+  sessionWords = Math.min(5, Math.max(1, allWords.length));
+  sessionIdx = 0; sessionCorrect = 0; sessionWrong = 0;
   document.getElementById('practice-start-section').style.display = 'none';
   document.getElementById('practice-session').style.display = '';
   document.getElementById('session-summary').style.display = 'none';
-
   loadQuestion();
 }
 
-function loadQuestion() {
-  currentWord = sessionWords[sessionIdx];
-  currentQuizType = cfg.direction === 'both'
-    ? (Math.random() > .5 ? 'es_to_en' : 'en_to_es')
-    : cfg.direction;
-
-  // Progress
-  const total = sessionWords.length;
+async function loadQuestion() {
+  const total = sessionWords;   // ahora es un número (ver startPractice)
   document.getElementById('session-progress-text').textContent = `Pregunta ${sessionIdx + 1} de ${total}`;
   document.getElementById('session-score-text').textContent = `✓ ${sessionCorrect} · ✗ ${sessionWrong}`;
   document.getElementById('session-progress-bar').style.width = `${(sessionIdx / total) * 100}%`;
 
-  // Flashcard
-  const isEsToEn = currentQuizType === 'es_to_en';
-  document.getElementById('flashcard-prompt').textContent = isEsToEn
-    ? '¿Cómo se dice en inglés?' : '¿Qué significa en español?';
-  document.getElementById('flashcard-word').textContent = isEsToEn
-    ? currentWord.word_es : currentWord.word_en;
-  // Show pronunciation only when showing the English word
-  const pronEl = document.getElementById('flashcard-pronunciation');
-  pronEl.textContent = (!isEsToEn && currentWord.pronunciation_es)
-    ? `(${currentWord.pronunciation_es})` : '';
-  document.getElementById('flashcard-hint').textContent = `Tipo: ${currentWord.type}`;
-  document.getElementById('quiz-direction-badge').textContent = isEsToEn ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸';
-  document.getElementById('quiz-input').placeholder = isEsToEn ? 'Tu respuesta en inglés…' : 'Tu respuesta en español…';
-
-  // Reset UI
-  document.getElementById('quiz-input').value = '';
-  document.getElementById('quiz-result').style.display = 'none';
   document.getElementById('step-sentence').style.display = 'none';
   document.getElementById('step-next').style.display = 'none';
   document.getElementById('step-flashcard').style.display = '';
-  document.getElementById('quiz-submit-btn').disabled = false;
 
-  setTimeout(() => document.getElementById('quiz-input').focus(), 100);
-}
-
-async function submitQuizAnswer() {
-  const answer = document.getElementById('quiz-input').value.trim();
-  if (!answer) return;
-
-  const btn = document.getElementById('quiz-submit-btn');
-  const spinner = document.getElementById('quiz-spinner');
-  btn.disabled = true;
-  spinner.style.display = '';
-
-  try {
-    const res = await fetch(`${API}/api/quiz/check`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ word_id: currentWord.id, quiz_type: currentQuizType, answer })
-    });
-    const data = await res.json();
-
-    const resultEl = document.getElementById('quiz-result');
-    resultEl.style.display = '';
-
-    if (data.correct) {
-      sessionCorrect++;
-      resultEl.innerHTML = `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:20px;">✅</span>
-        <div><p style="font-weight:600;color:var(--green);">¡Correcto!</p>
-        <p style="font-size:12px;color:var(--muted);">Respuesta: <strong>${data.correct_answer}</strong></p></div>
-      </div>`;
-      // Show sentence step
-      showSentenceStep();
-    } else {
-      sessionWrong++;
-      resultEl.innerHTML = `<div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:20px;">❌</span>
-        <div><p style="font-weight:600;color:var(--red);">Incorrecto</p>
-        <p style="font-size:12px;color:var(--muted);">La respuesta era: <strong style="color:var(--text);">${data.correct_answer}</strong></p></div>
-      </div>`;
-      document.getElementById('step-next').style.display = '';
-    }
-
+  const q = await fetchNextQuestion();
+  renderQuestion(q, document.getElementById('session-question'), (data) => {
+    currentAnswerWord = data.word;
+    if (data.correct) { sessionCorrect++; showSentenceStep(); }
+    else { sessionWrong++; document.getElementById('step-next').style.display = ''; }
     document.getElementById('session-score-text').textContent = `✓ ${sessionCorrect} · ✗ ${sessionWrong}`;
-  } finally {
-    spinner.style.display = 'none';
-  }
+  });
 }
 
 function showSentenceStep() {
   document.getElementById('step-sentence').style.display = '';
-  document.getElementById('sentence-word').textContent = currentWord.word_en;
+  document.getElementById('sentence-word').textContent = currentAnswerWord.word_en;
   document.getElementById('sentence-example-hint').textContent =
-    `Ejemplo del vocabulario: "${currentWord.example_en}"`;
+    `Ejemplo del vocabulario: "${currentAnswerWord.example_en}"`;
   document.getElementById('sentence-input').value = '';
   document.getElementById('sentence-result').style.display = 'none';
   document.getElementById('sentence-submit-btn').disabled = false;
@@ -986,7 +894,7 @@ async function submitSentence() {
     const res = await fetch(`${API}/api/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ word_en: currentWord.word_en, sentence })
+      body: JSON.stringify({ word_en: currentAnswerWord.word_en, sentence })
     });
     const data = await res.json();
 
@@ -1018,7 +926,7 @@ function skipSentence() {
 
 function nextQuestion() {
   sessionIdx++;
-  const total = sessionWords.length;
+  const total = sessionWords;
   document.getElementById('session-progress-bar').style.width = `${(sessionIdx / total) * 100}%`;
 
   if (sessionIdx >= total) {
@@ -1034,7 +942,7 @@ function showSummary() {
   document.getElementById('step-next').style.display = 'none';
   document.getElementById('session-progress-bar').style.width = '100%';
 
-  const total = sessionWords.length;
+  const total = sessionWords;
   const pct = Math.round(sessionCorrect / total * 100);
   const color = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
 
@@ -1079,15 +987,6 @@ function speak(text, lang = 'en-US', btnId = null) {
   }
 
   speechSynthesis.speak(u);
-}
-
-function speakFlashcard() {
-  if (!currentWord) return;
-  const isEsToEn = currentQuizType === 'es_to_en';
-  // When showing Spanish word → speak Spanish; when showing English → speak English
-  const text = isEsToEn ? currentWord.word_es : currentWord.word_en;
-  const lang = isEsToEn ? 'es-ES' : 'en-US';
-  speak(text, lang, 'spk-flashcard');
 }
 
 // Preload voices (some browsers lazy-load them)
