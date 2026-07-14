@@ -71,3 +71,39 @@ def test_pick_word_prefers_failing_words():
     rng = random.Random(42)
     picks = [quiz.pick_word(words, rng)["id"] for _ in range(500)]
     assert picks.count("id-2") > picks.count("id-1") * 2
+
+
+# ── expected_answer ──────────────────────────────────────────────────
+
+def test_expected_answer_by_type_and_direction():
+    w = make_word(1, synonym_en="syn-en", synonym_es="syn-es")
+    assert quiz.expected_answer(w, "mc_word", "es_to_en") == ("word1", "syn-en")
+    assert quiz.expected_answer(w, "typing", "en_to_es") == ("palabra1", "syn-es")
+    assert quiz.expected_answer(w, "cloze", "en_to_es") == ("word1", "")
+    assert quiz.expected_answer(w, "mc_phrase", "en_to_es") == (
+        "Esta es palabra1 en una frase.", "")
+    assert quiz.expected_answer(w, "mc_phrase", "es_to_en") == (
+        "This is word1 in a sentence.", "")
+
+
+# ── elegibilidad ─────────────────────────────────────────────────────
+
+def test_word_without_example_never_gets_phrase_or_cloze():
+    words = [make_word(i) for i in range(1, 6)]
+    words[0]["example_en"] = ""
+    words[0]["example_es"] = ""
+    for _ in range(50):
+        t = quiz.choose_type(words[0], words, ["mc_phrase", "cloze"], random)
+        assert t == "mc_word"  # fallback del spec §5.2
+
+
+def test_cloze_requires_word_present_in_example():
+    words = [make_word(i) for i in range(1, 6)]
+    words[0]["example_en"] = "A sentence without the target."
+    assert "cloze" not in quiz.eligible_types(words[0], words, ["cloze"])
+
+
+def test_small_vocab_degrades_to_typing():
+    words = [make_word(i) for i in range(1, 4)]  # solo 3 palabras
+    assert quiz.eligible_types(words[0], words, ["mc_word"]) == []
+    assert quiz.choose_type(words[0], words, ["mc_word"], random) == "typing"

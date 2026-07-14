@@ -36,3 +36,47 @@ def word_weight(w: dict) -> float:
 def pick_word(words: list, rng=random) -> dict:
     weights = [word_weight(w) for w in words]
     return rng.choices(words, weights=weights, k=1)[0]
+
+
+def expected_answer(word: dict, qtype: str, direction: str) -> tuple:
+    if qtype == "cloze":
+        return word["word_en"], ""
+    if qtype == "mc_phrase":
+        if direction == "en_to_es":
+            return word["example_es"], ""
+        return word["example_en"], ""
+    if direction == "es_to_en":
+        return word["word_en"], word.get("synonym_en", "")
+    return word["word_es"], word.get("synonym_es", "")
+
+
+def _has_examples(w: dict) -> bool:
+    return bool(w.get("example_en")) and bool(w.get("example_es"))
+
+
+def eligible_types(word: dict, all_words: list, requested: list) -> list:
+    n = len(all_words)
+    out = []
+    for t in requested:
+        if t == "typing":
+            out.append(t)
+        elif n < 4:
+            continue
+        elif t == "mc_word":
+            out.append(t)
+        elif t == "cloze":
+            if word.get("example_en") and word["word_en"].lower() in word["example_en"].lower():
+                out.append(t)
+        elif t == "mc_phrase":
+            if _has_examples(word):
+                donors = [w for w in all_words if w["id"] != word["id"] and _has_examples(w)]
+                if len(donors) >= 3:
+                    out.append(t)
+    return out
+
+
+def choose_type(word: dict, all_words: list, requested: list, rng=random) -> str:
+    elig = eligible_types(word, all_words, requested)
+    if elig:
+        return rng.choice(elig)
+    return "mc_word" if len(all_words) >= 4 else "typing"
