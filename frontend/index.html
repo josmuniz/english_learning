@@ -230,9 +230,29 @@
         <h3 style="font-size:15px; font-weight:700; margin-bottom:16px;">⏱ Recordatorio automático</h3>
         <div style="margin-bottom:16px;">
           <p style="font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Intervalo</p>
-          <div style="display:flex; gap:8px;">
-            <button class="btn-ghost" id="int-15" onclick="setInterval_(15)" style="flex:1;">15 min</button>
-            <button class="btn-ghost" id="int-20" onclick="setInterval_(20)" style="flex:1;">20 min</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn-ghost" id="int-5"  onclick="setIntervalMin(5)"  style="flex:1;">5 min</button>
+            <button class="btn-ghost" id="int-10" onclick="setIntervalMin(10)" style="flex:1;">10 min</button>
+            <button class="btn-ghost" id="int-15" onclick="setIntervalMin(15)" style="flex:1;">15 min</button>
+            <button class="btn-ghost" id="int-30" onclick="setIntervalMin(30)" style="flex:1;">30 min</button>
+            <input id="int-custom" class="inp" type="number" min="1" max="120" placeholder="otro"
+              style="flex:1; min-width:70px; padding:8px 10px;"
+              onchange="setIntervalMin(parseInt(this.value)||15)"/>
+          </div>
+          <div style="margin-top:12px;">
+            <p style="font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Tipos de pregunta</p>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:13px;">
+              <label><input type="checkbox" id="type-mc_word" checked onchange="toggleType('mc_word')"/> Palabra (opciones)</label>
+              <label><input type="checkbox" id="type-mc_phrase" checked onchange="toggleType('mc_phrase')"/> Frase (opciones)</label>
+              <label><input type="checkbox" id="type-cloze" checked onchange="toggleType('cloze')"/> Completar hueco</label>
+              <label><input type="checkbox" id="type-typing" checked onchange="toggleType('typing')"/> Escribir</label>
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <p style="font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">Preguntas por interrupción</p>
+            <select id="per-interrupt" class="inp" style="width:auto; padding:6px 10px;" onchange="cfg.perInterrupt=parseInt(this.value); saveConfig();">
+              <option value="1">1</option><option value="3">3</option><option value="5">5</option>
+            </select>
           </div>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -290,30 +310,10 @@
 
       <!-- STEP 1: Flashcard -->
       <div id="step-flashcard" class="card" style="padding:0; overflow:hidden;">
-        <div style="padding:12px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px;">
-          <span style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">Flashcard</span>
-          <span id="quiz-direction-badge" class="badge badge-green"></span>
+        <div style="padding:12px 20px; border-bottom:1px solid var(--border);">
+          <span style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">Pregunta</span>
         </div>
-        <div class="flashcard">
-          <p style="font-size:12px; color:var(--muted); margin-bottom:12px;" id="flashcard-prompt"></p>
-          <div style="display:flex; align-items:center; gap:12px; justify-content:center; margin-bottom:6px;">
-            <p style="font-size:36px; font-weight:700; color:var(--accent); margin:0;" id="flashcard-word"></p>
-            <button class="speak-btn" id="spk-flashcard" style="font-size:18px; padding:5px 10px;" onclick="speakFlashcard()" title="Escuchar">🔊</button>
-          </div>
-          <p class="pronunciation" id="flashcard-pronunciation" style="margin-bottom:6px;"></p>
-          <p style="font-size:13px; color:var(--faint); font-style:italic;" id="flashcard-hint"></p>
-        </div>
-        <div style="padding:20px; border-top:1px solid var(--border);">
-          <div style="display:flex; gap:12px; align-items:center;">
-            <input id="quiz-input" class="inp" type="text" placeholder="Tu respuesta en inglés…"
-              onkeydown="if(event.key==='Enter') submitQuizAnswer()"/>
-            <button class="btn-primary" onclick="submitQuizAnswer()" id="quiz-submit-btn" style="white-space:nowrap; display:flex; align-items:center; gap:8px;">
-              Verificar
-              <span id="quiz-spinner" class="spinner" style="display:none;"></span>
-            </button>
-          </div>
-          <div id="quiz-result" style="margin-top:16px; display:none;"></div>
-        </div>
+        <div id="session-question" style="padding:24px;"></div>
       </div>
 
       <!-- STEP 2: Sentence building (hidden) -->
@@ -362,6 +362,18 @@
 
 </main>
 
+<!-- Quiz modal (interrupción) -->
+<div id="quiz-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:100; align-items:center; justify-content:center;">
+  <div class="card" style="max-width:540px; width:92%; padding:24px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+      <span style="font-size:13px; font-weight:700;">🎯 ¡Hora de practicar!</span>
+      <span style="font-size:12px; color:var(--muted);" id="qm-progress"></span>
+    </div>
+    <div id="qm-body"></div>
+    <div id="qm-actions" style="margin-top:16px; text-align:right;"></div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toast"></div>
 
@@ -371,20 +383,62 @@ const API = 'http://localhost:8003';
 
 // ── State ──────────────────────────────────────────────────────────
 let allWords = [];
-let timerActive = false;
-let intervalMinutes = 15;
-let timerSeconds = 0;
-let timerTotal = 0;
 let timerTick = null;
-let quizMode = 'both';
+
+const CONFIG_KEY = 'elearn_config';
+const DEFAULT_CFG = {
+  intervalMin: 15, direction: 'both',
+  types: ['mc_word', 'mc_phrase', 'cloze', 'typing'],
+  perInterrupt: 1, timerActive: false, timerEndsAt: null,
+};
+let cfg = loadConfig();
+
+function loadConfig() {
+  try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}') }; }
+  catch { return { ...DEFAULT_CFG }; }
+}
+function saveConfig() { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+
+function setIntervalMin(min) {
+  cfg.intervalMin = Math.max(1, Math.min(120, min));
+  saveConfig();
+  ['5','10','15','30'].forEach(m => {
+    const el = document.getElementById(`int-${m}`);
+    const active = cfg.intervalMin === parseInt(m);
+    el.style.background = active ? 'var(--tag-bg)' : '';
+    el.style.color = active ? 'var(--tag-txt)' : '';
+    el.style.borderColor = active ? 'var(--accent)' : '';
+  });
+  const custom = document.getElementById('int-custom');
+  if (!['5','10','15','30'].includes(String(cfg.intervalMin))) custom.value = cfg.intervalMin;
+}
+
+function toggleType(t) {
+  const idx = cfg.types.indexOf(t);
+  if (idx >= 0) cfg.types.splice(idx, 1); else cfg.types.push(t);
+  if (cfg.types.length === 0) {          // nunca dejar 0 tipos
+    cfg.types.push(t);
+    document.getElementById(`type-${t}`).checked = true;
+    toast('Debe haber al menos un tipo activo', 'error');
+  }
+  saveConfig();
+}
+
+function applyConfigToUI() {
+  setIntervalMin(cfg.intervalMin);
+  setQuizMode(cfg.direction);
+  ['mc_word','mc_phrase','cloze','typing'].forEach(t => {
+    document.getElementById(`type-${t}`).checked = cfg.types.includes(t);
+  });
+  document.getElementById('per-interrupt').value = String(cfg.perInterrupt);
+}
 
 // Session state
-let sessionWords = [];
+let sessionWords = 0;
 let sessionIdx = 0;
 let sessionCorrect = 0;
 let sessionWrong = 0;
-let currentWord = null;
-let currentQuizType = null;
+let currentAnswerWord = null;
 
 // ── Theme ──────────────────────────────────────────────────────────
 function toggleTheme() {
@@ -573,7 +627,8 @@ async function deleteWord(id) {
 
 // ── Practice helpers ───────────────────────────────────────────────
 function setQuizMode(mode) {
-  quizMode = mode;
+  cfg.direction = mode;
+  saveConfig();
   ['both', 'es_to_en', 'en_to_es'].forEach(m => {
     const el = document.getElementById(`mode-${m}`);
     el.style.background = m === mode ? 'var(--tag-bg)' : '';
@@ -582,48 +637,46 @@ function setQuizMode(mode) {
   });
 }
 
-function setInterval_(min) {
-  intervalMinutes = min;
-  ['15','20'].forEach(m => {
-    const el = document.getElementById(`int-${m}`);
-    const active = String(min) === m;
-    el.style.background = active ? 'var(--tag-bg)' : '';
-    el.style.color = active ? 'var(--tag-txt)' : '';
-    el.style.borderColor = active ? 'var(--accent)' : '';
-  });
-}
-
 function updatePracticeSection() {
   const has = allWords.length >= 1;
   const btn = document.getElementById('start-practice-btn');
   const hint = document.getElementById('practice-start-hint');
   btn.disabled = !has;
-  hint.textContent = has
-    ? `Tienes ${allWords.length} palabra${allWords.length!==1?'s':''} lista${allWords.length!==1?'s':''} para practicar.`
-    : 'Necesitas al menos 1 palabra en tu vocabulario para practicar.';
+  hint.textContent = !has
+    ? 'Necesitas al menos 1 palabra en tu vocabulario para practicar.'
+    : allWords.length < 4
+      ? `Tienes ${allWords.length} palabra(s). Agrega al menos 4 para activar la opción múltiple (por ahora todo será de escribir).`
+      : `Tienes ${allWords.length} palabras listas para practicar.`;
 }
 
 // ── Timer ──────────────────────────────────────────────────────────
-function toggleTimer() {
-  if (timerActive) stopTimer(); else startTimer();
-}
+function toggleTimer() { cfg.timerActive ? stopTimer() : startTimer(); }
 
 function startTimer() {
   if (allWords.length === 0) { toast('Agrega palabras primero', 'error'); return; }
   requestNotifPermission();
-  timerActive = true;
-  timerTotal = intervalMinutes * 60;
-  timerSeconds = timerTotal;
+  cfg.timerActive = true;
+  cfg.timerEndsAt = Date.now() + cfg.intervalMin * 60 * 1000;
+  saveConfig();
+  armTimerUI();
+  toast(`⏱ Timer activado: cada ${cfg.intervalMin} minutos`, 'success');
+}
+
+function armTimerUI() {
   document.getElementById('timer-toggle-btn').textContent = 'Desactivar';
   document.getElementById('timer-toggle-btn').style.background = 'var(--red)';
-  document.getElementById('timer-status-text').innerHTML = '<span style="display:flex;align-items:center;gap:6px;"><span class="pulse-dot"></span> Activo</span>';
+  document.getElementById('timer-status-text').innerHTML =
+    '<span style="display:flex;align-items:center;gap:6px;"><span class="pulse-dot"></span> Activo</span>';
   document.getElementById('ring-subtitle').textContent = 'Próxima práctica en…';
+  clearInterval(timerTick);
   timerTick = setInterval(tickTimer, 1000);
-  toast(`⏱ Timer activado: cada ${intervalMinutes} minutos`, 'success');
+  tickTimer();
 }
 
 function stopTimer() {
-  timerActive = false;
+  cfg.timerActive = false;
+  cfg.timerEndsAt = null;
+  saveConfig();
   clearInterval(timerTick);
   document.getElementById('timer-toggle-btn').textContent = 'Activar';
   document.getElementById('timer-toggle-btn').style.background = '';
@@ -635,40 +688,42 @@ function stopTimer() {
 }
 
 function tickTimer() {
-  timerSeconds--;
-  const m = Math.floor(timerSeconds / 60).toString().padStart(2,'0');
-  const s = (timerSeconds % 60).toString().padStart(2,'0');
+  const remaining = Math.max(0, Math.round((cfg.timerEndsAt - Date.now()) / 1000));
+  const total = cfg.intervalMin * 60;
+  const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+  const s = (remaining % 60).toString().padStart(2, '0');
   document.getElementById('timer-label').textContent = `${m}:${s}`;
-
-  // Ring progress
-  const progress = timerSeconds / timerTotal;
-  const circumference = 276.46;
-  document.getElementById('ring-fill').style.strokeDashoffset = circumference * (1 - progress);
-
-  const nextDate = new Date(Date.now() + timerSeconds * 1000);
-  document.getElementById('timer-next-text').textContent = `A las ${nextDate.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'})}`;
-
-  if (timerSeconds <= 0) {
-    clearInterval(timerTick);
-    fireTimerAlert();
-  }
+  document.getElementById('ring-fill').style.strokeDashoffset =
+    276.46 * (1 - remaining / total);
+  document.getElementById('timer-next-text').textContent =
+    `A las ${new Date(cfg.timerEndsAt).toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'})}`;
+  if (remaining <= 0) { clearInterval(timerTick); fireTimerAlert(); }
 }
 
 function fireTimerAlert() {
-  toast('🎯 ¡Es hora de practicar!', 'success');
-  if (Notification.permission === 'granted') {
-    const n = new Notification('English Learning', {
-      body: '¡Es hora de practicar! Abre la app para comenzar.',
-      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><rect width="28" height="28" rx="8" fill="%2322c55e" opacity=".2"/><text y="20" x="5" font-size="18">📚</text></svg>'
-    });
-    n.onclick = () => { window.focus(); switchTab('practice'); n.close(); };
+  const sessionActive =
+    document.getElementById('practice-session').style.display !== 'none' &&
+    document.getElementById('session-summary').style.display === 'none';
+  if (sessionActive) {
+    toast('🎯 Ya estás practicando — timer rearmado', 'info');
+    rearmTimer();
+    return;
   }
-  // Auto-restart timer and switch to practice
-  switchTab('practice');
-  startPractice();
-  // Restart countdown
-  timerSeconds = timerTotal;
-  timerTick = setInterval(tickTimer, 1000);
+  toast('🎯 ¡Es hora de practicar!', 'success');
+  if (Notification.permission === 'granted' && document.hidden) {
+    const n = new Notification('English Learning', {
+      body: '¡Es hora de practicar! Click para responder.',
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  }
+  openQuizModal(cfg.perInterrupt);
+}
+
+function rearmTimer() {
+  if (!cfg.timerActive) return;
+  cfg.timerEndsAt = Date.now() + cfg.intervalMin * 60 * 1000;
+  saveConfig();
+  armTimerUI();
 }
 
 function requestNotifPermission() {
@@ -677,112 +732,163 @@ function requestNotifPermission() {
   }
 }
 
-// ── Practice session ───────────────────────────────────────────────
-function shuffle(arr) { return [...arr].sort(() => Math.random() - .5); }
+// ── Quiz UI compartida ─────────────────────────────────────────────
+async function fetchNextQuestion() {
+  const params = new URLSearchParams({ types: cfg.types.join(','), direction: cfg.direction });
+  const res = await fetch(`${API}/api/quiz/next?${params}`);
+  if (!res.ok) throw new Error((await res.json()).detail || 'Error al obtener pregunta');
+  return res.json();
+}
 
+async function sendAnswer(q, answer) {
+  const res = await fetch(`${API}/api/quiz/answer`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ word_id: q.word_id, type: q.type, direction: q.direction, answer }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Error al validar la respuesta');
+  return res.json();
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+const PROMPT_LABEL = {
+  mc_word:  { es_to_en: '¿Cómo se dice en inglés?', en_to_es: '¿Qué significa en español?' },
+  mc_phrase:{ es_to_en: '¿Cuál es la frase en inglés?', en_to_es: '¿Qué significa esta frase?' },
+  cloze:    { es_to_en: 'Completa la frase:' },
+  typing:   { es_to_en: 'Escribe la traducción en inglés:', en_to_es: 'Escribe la traducción en español:' },
+};
+
+function renderQuestion(q, container, onDone) {
+  const label = (PROMPT_LABEL[q.type] || {})[q.direction] || 'Responde:';
+  const speakLang = (q.direction === 'en_to_es' || q.type === 'cloze') ? 'en-US' : 'es-ES';
+  const promptSize = q.type.startsWith('mc_') || q.type === 'cloze' ? 18 : 30;
+  let html = `
+    <p style="font-size:12px; color:var(--muted); margin-bottom:8px;">${label}
+      <span class="badge badge-green" style="margin-left:6px;">${q.direction === 'es_to_en' ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸'}</span></p>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+      <p style="font-size:${promptSize}px; font-weight:700; color:var(--accent); margin:0;">${esc(q.prompt)}</p>
+      <button class="speak-btn" onclick="speak(${JSON.stringify(q.prompt).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}, '${speakLang}', null)" title="Escuchar">🔊</button>
+    </div>
+    ${q.prompt_secondary ? `<p class="pronunciation">${esc(q.prompt_secondary)}</p>` : ''}
+    <p style="font-size:12px; color:var(--faint); font-style:italic; margin-bottom:14px;">Tipo: ${esc(q.hint)}</p>`;
+
+  if (q.options) {
+    html += `<div style="display:grid; gap:8px;">` + q.options.map(o =>
+      `<button class="btn-ghost qopt" style="text-align:left;" onclick="answerFromUI(this, ${JSON.stringify(o).replace(/&/g,'&amp;').replace(/"/g,'&quot;')})">${esc(o)}</button>`
+    ).join('') + `</div>`;
+  } else {
+    html += `
+      <div style="display:flex; gap:10px;">
+        <input id="q-typing-input" class="inp" type="text" placeholder="Tu respuesta…"
+          onkeydown="if(event.key==='Enter') answerFromUI(null, this.value)"/>
+        <button class="btn-primary" onclick="answerFromUI(null, document.getElementById('q-typing-input').value)">Verificar</button>
+      </div>`;
+  }
+  html += `<div id="q-feedback" style="margin-top:14px;"></div>`;
+  container.innerHTML = html;
+
+  // closure para que los onclick lleguen a esta pregunta
+  window.answerFromUI = async (btnEl, answer) => {
+    if (!answer || !answer.trim()) return;
+    container.querySelectorAll('button.qopt, .btn-primary, #q-typing-input').forEach(el => el.disabled = true);
+    let data;
+    try {
+      data = await sendAnswer(q, answer.trim());
+    } catch (e) {
+      toast(e.message, 'error');
+      container.querySelectorAll('button.qopt, .btn-primary, #q-typing-input').forEach(el => el.disabled = false);
+      return;
+    }
+    const fb = container.querySelector('#q-feedback');
+    fb.innerHTML = data.correct
+      ? `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:10px 14px;">✅ <strong style="color:var(--green);">¡Correcto!</strong> <span style="font-size:12px;color:var(--muted);">${esc(data.correct_answer)}</span></div>`
+      : `<div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:8px;padding:10px 14px;">❌ <strong style="color:var(--red);">Incorrecto.</strong> <span style="font-size:12px;color:var(--muted);">Era: <strong style="color:var(--text);">${esc(data.correct_answer)}</strong></span></div>`;
+    if (btnEl) btnEl.style.borderColor = data.correct ? 'var(--green)' : 'var(--red)';
+    onDone(data);
+  };
+  const inp = container.querySelector('#q-typing-input');
+  if (inp) setTimeout(() => inp.focus(), 100);
+}
+
+// ── Modal ──────────────────────────────────────────────────────────
+let modalTotal = 0, modalDone = 0, modalCorrect = 0;
+
+async function openQuizModal(n) {
+  modalTotal = n; modalDone = 0; modalCorrect = 0;
+  document.getElementById('quiz-modal').style.display = 'flex';
+  await modalNextQuestion();
+}
+
+async function modalNextQuestion() {
+  document.getElementById('qm-progress').textContent = `Pregunta ${modalDone + 1} de ${modalTotal}`;
+  document.getElementById('qm-actions').innerHTML = '';
+  try {
+    const q = await fetchNextQuestion();
+    renderQuestion(q, document.getElementById('qm-body'), (data) => {
+      modalDone++;
+      if (data.correct) modalCorrect++;
+      const last = modalDone >= modalTotal;
+      document.getElementById('qm-actions').innerHTML = last
+        ? `<button class="btn-primary" onclick="closeQuizModal()">Cerrar (${modalCorrect}/${modalTotal})</button>`
+        : `<button class="btn-primary" onclick="modalNextQuestion()">Siguiente →</button>`;
+    });
+  } catch (e) {
+    document.getElementById('qm-body').innerHTML =
+      `<p style="color:var(--red); font-size:13px;">${e.message}</p>`;
+    document.getElementById('qm-actions').innerHTML =
+      `<button class="btn-ghost" onclick="closeQuizModal()">Cerrar</button>`;
+  }
+}
+
+function closeQuizModal() {
+  document.getElementById('quiz-modal').style.display = 'none';
+  rearmTimer();
+  loadWords();   // refresca stats en las cards
+}
+
+// ── Practice session ───────────────────────────────────────────────
 function startPractice() {
   if (allWords.length === 0) return;
-
-  // Pick up to 5 random words
-  sessionWords = shuffle(allWords).slice(0, Math.min(5, allWords.length));
-  sessionIdx = 0;
-  sessionCorrect = 0;
-  sessionWrong = 0;
-
+  sessionWords = Math.min(5, Math.max(1, allWords.length));
+  sessionIdx = 0; sessionCorrect = 0; sessionWrong = 0;
   document.getElementById('practice-start-section').style.display = 'none';
   document.getElementById('practice-session').style.display = '';
   document.getElementById('session-summary').style.display = 'none';
-
   loadQuestion();
 }
 
-function loadQuestion() {
-  currentWord = sessionWords[sessionIdx];
-  currentQuizType = quizMode === 'both'
-    ? (Math.random() > .5 ? 'es_to_en' : 'en_to_es')
-    : quizMode;
-
-  // Progress
-  const total = sessionWords.length;
+async function loadQuestion() {
+  const total = sessionWords;   // ahora es un número (ver startPractice)
   document.getElementById('session-progress-text').textContent = `Pregunta ${sessionIdx + 1} de ${total}`;
   document.getElementById('session-score-text').textContent = `✓ ${sessionCorrect} · ✗ ${sessionWrong}`;
   document.getElementById('session-progress-bar').style.width = `${(sessionIdx / total) * 100}%`;
 
-  // Flashcard
-  const isEsToEn = currentQuizType === 'es_to_en';
-  document.getElementById('flashcard-prompt').textContent = isEsToEn
-    ? '¿Cómo se dice en inglés?' : '¿Qué significa en español?';
-  document.getElementById('flashcard-word').textContent = isEsToEn
-    ? currentWord.word_es : currentWord.word_en;
-  // Show pronunciation only when showing the English word
-  const pronEl = document.getElementById('flashcard-pronunciation');
-  pronEl.textContent = (!isEsToEn && currentWord.pronunciation_es)
-    ? `(${currentWord.pronunciation_es})` : '';
-  document.getElementById('flashcard-hint').textContent = `Tipo: ${currentWord.type}`;
-  document.getElementById('quiz-direction-badge').textContent = isEsToEn ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸';
-  document.getElementById('quiz-input').placeholder = isEsToEn ? 'Tu respuesta en inglés…' : 'Tu respuesta en español…';
-
-  // Reset UI
-  document.getElementById('quiz-input').value = '';
-  document.getElementById('quiz-result').style.display = 'none';
   document.getElementById('step-sentence').style.display = 'none';
   document.getElementById('step-next').style.display = 'none';
   document.getElementById('step-flashcard').style.display = '';
-  document.getElementById('quiz-submit-btn').disabled = false;
-
-  setTimeout(() => document.getElementById('quiz-input').focus(), 100);
-}
-
-async function submitQuizAnswer() {
-  const answer = document.getElementById('quiz-input').value.trim();
-  if (!answer) return;
-
-  const btn = document.getElementById('quiz-submit-btn');
-  const spinner = document.getElementById('quiz-spinner');
-  btn.disabled = true;
-  spinner.style.display = '';
 
   try {
-    const res = await fetch(`${API}/api/quiz/check`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ word_id: currentWord.id, quiz_type: currentQuizType, answer })
+    const q = await fetchNextQuestion();
+    renderQuestion(q, document.getElementById('session-question'), (data) => {
+      currentAnswerWord = data.word;
+      if (data.correct) { sessionCorrect++; showSentenceStep(); }
+      else { sessionWrong++; document.getElementById('step-next').style.display = ''; }
+      document.getElementById('session-score-text').textContent = `✓ ${sessionCorrect} · ✗ ${sessionWrong}`;
     });
-    const data = await res.json();
-
-    const resultEl = document.getElementById('quiz-result');
-    resultEl.style.display = '';
-
-    if (data.correct) {
-      sessionCorrect++;
-      resultEl.innerHTML = `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:20px;">✅</span>
-        <div><p style="font-weight:600;color:var(--green);">¡Correcto!</p>
-        <p style="font-size:12px;color:var(--muted);">Respuesta: <strong>${data.correct_answer}</strong></p></div>
-      </div>`;
-      // Show sentence step
-      showSentenceStep();
-    } else {
-      sessionWrong++;
-      resultEl.innerHTML = `<div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:20px;">❌</span>
-        <div><p style="font-weight:600;color:var(--red);">Incorrecto</p>
-        <p style="font-size:12px;color:var(--muted);">La respuesta era: <strong style="color:var(--text);">${data.correct_answer}</strong></p></div>
-      </div>`;
-      document.getElementById('step-next').style.display = '';
-    }
-
-    document.getElementById('session-score-text').textContent = `✓ ${sessionCorrect} · ✗ ${sessionWrong}`;
-  } finally {
-    spinner.style.display = 'none';
+  } catch (e) {
+    document.getElementById('session-question').innerHTML =
+      `<p style="color:var(--red); font-size:13px;">${esc(e.message)}</p>
+       <div style="margin-top:12px;"><button class="btn-ghost" onclick="loadQuestion()">Reintentar</button></div>`;
   }
 }
 
 function showSentenceStep() {
   document.getElementById('step-sentence').style.display = '';
-  document.getElementById('sentence-word').textContent = currentWord.word_en;
+  document.getElementById('sentence-word').textContent = currentAnswerWord.word_en;
   document.getElementById('sentence-example-hint').textContent =
-    `Ejemplo del vocabulario: "${currentWord.example_en}"`;
+    `Ejemplo del vocabulario: "${currentAnswerWord.example_en}"`;
   document.getElementById('sentence-input').value = '';
   document.getElementById('sentence-result').style.display = 'none';
   document.getElementById('sentence-submit-btn').disabled = false;
@@ -802,7 +908,7 @@ async function submitSentence() {
     const res = await fetch(`${API}/api/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ word_en: currentWord.word_en, sentence })
+      body: JSON.stringify({ word_en: currentAnswerWord.word_en, sentence })
     });
     const data = await res.json();
 
@@ -834,7 +940,7 @@ function skipSentence() {
 
 function nextQuestion() {
   sessionIdx++;
-  const total = sessionWords.length;
+  const total = sessionWords;
   document.getElementById('session-progress-bar').style.width = `${(sessionIdx / total) * 100}%`;
 
   if (sessionIdx >= total) {
@@ -850,7 +956,7 @@ function showSummary() {
   document.getElementById('step-next').style.display = 'none';
   document.getElementById('session-progress-bar').style.width = '100%';
 
-  const total = sessionWords.length;
+  const total = sessionWords;
   const pct = Math.round(sessionCorrect / total * 100);
   const color = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
 
@@ -862,7 +968,7 @@ function showSummary() {
   document.getElementById('summary-detail').textContent =
     `${sessionCorrect} correctas · ${sessionWrong} incorrectas de ${total} palabras`;
   document.getElementById('summary-next-hint').textContent =
-    timerActive ? `Próxima sesión en ${intervalMinutes} minutos` : 'Activa el timer para practicar automáticamente';
+    cfg.timerActive ? `Próxima sesión en ${cfg.intervalMin} minutos` : 'Activa el timer para practicar automáticamente';
 
   document.getElementById('session-summary').style.display = '';
 }
@@ -897,15 +1003,6 @@ function speak(text, lang = 'en-US', btnId = null) {
   speechSynthesis.speak(u);
 }
 
-function speakFlashcard() {
-  if (!currentWord) return;
-  const isEsToEn = currentQuizType === 'es_to_en';
-  // When showing Spanish word → speak Spanish; when showing English → speak English
-  const text = isEsToEn ? currentWord.word_es : currentWord.word_en;
-  const lang = isEsToEn ? 'es-ES' : 'en-US';
-  speak(text, lang, 'spk-flashcard');
-}
-
 // Preload voices (some browsers lazy-load them)
 if ('speechSynthesis' in window) {
   speechSynthesis.getVoices();
@@ -913,9 +1010,17 @@ if ('speechSynthesis' in window) {
 }
 
 // ── Init ───────────────────────────────────────────────────────────
-setInterval_(15);
-setQuizMode('both');
-loadWords();
+applyConfigToUI();
+loadWords().then(() => {
+  if (new URLSearchParams(location.search).get('quiz') === '1') {
+    openQuizModal(cfg.perInterrupt);
+  } else if (cfg.timerActive && cfg.timerEndsAt) {
+    if (cfg.timerEndsAt <= Date.now()) fireTimerAlert();
+    else armTimerUI();
+  } else if (cfg.timerActive) {
+    stopTimer();
+  }
+});
 </script>
 </body>
 </html>

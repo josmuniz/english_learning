@@ -11,6 +11,7 @@ App local de vocabulario inglés→español. Una sola página HTML consume una A
 | Frontend | HTML/CSS/JS vanilla single-file | `frontend/index.html` | servido por el backend |
 | Backend | FastAPI + Uvicorn | `backend/main.py` | 8003 |
 | Storage | JSON plano | `data/words.json` | — |
+| Motor de quiz | Python puro (sin I/O) | `backend/quiz.py` | — |
 
 ## Flujo de datos
 
@@ -22,6 +23,12 @@ Usuario escribe palabra
       → datamuse.com (palabras relacionadas)
       → ipa_to_spanish() convierte IPA a fonética española
   → merge → append a data/words.json → respuesta al frontend
+```
+
+```
+Timer (frontend, persistente en localStorage)
+  → GET /api/quiz/next (ponderado por fallos, 4 tipos, distractores del propio vocabulario)
+  → modal responde → POST /api/quiz/answer (match tolerante) → stats en words.json
 ```
 
 ## Decisiones
