@@ -769,14 +769,14 @@ function renderQuestion(q, container, onDone) {
       <span class="badge badge-green" style="margin-left:6px;">${q.direction === 'es_to_en' ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸'}</span></p>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
       <p style="font-size:${promptSize}px; font-weight:700; color:var(--accent); margin:0;">${esc(q.prompt)}</p>
-      <button class="speak-btn" onclick="speak(${JSON.stringify(q.prompt).replace(/"/g,'&quot;')}, '${speakLang}', null)" title="Escuchar">🔊</button>
+      <button class="speak-btn" onclick="speak(${JSON.stringify(q.prompt).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}, '${speakLang}', null)" title="Escuchar">🔊</button>
     </div>
     ${q.prompt_secondary ? `<p class="pronunciation">${esc(q.prompt_secondary)}</p>` : ''}
     <p style="font-size:12px; color:var(--faint); font-style:italic; margin-bottom:14px;">Tipo: ${esc(q.hint)}</p>`;
 
   if (q.options) {
     html += `<div style="display:grid; gap:8px;">` + q.options.map(o =>
-      `<button class="btn-ghost qopt" style="text-align:left;" onclick="answerFromUI(this, ${JSON.stringify(o).replace(/"/g,'&quot;')})">${esc(o)}</button>`
+      `<button class="btn-ghost qopt" style="text-align:left;" onclick="answerFromUI(this, ${JSON.stringify(o).replace(/&/g,'&amp;').replace(/"/g,'&quot;')})">${esc(o)}</button>`
     ).join('') + `</div>`;
   } else {
     html += `
