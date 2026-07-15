@@ -234,3 +234,24 @@ Con `./start.sh` corriendo en :8003 (launchd, KeepAlive):
 ### 4.5 Próximo paso
 
 Validación interactiva del usuario (diálogo real "+ Agregar" → Español → palabra nueva) + revisión global de rama y de seguridad antes de merge a `main`. Follow-up pendiente de fase 1 (fuera de este plan): aplicar `esc()` en `renderWords()`.
+
+---
+
+## Paso 5 · Documento integral de la solución (2026-07-15)
+
+**Meta:** Escribir un documento único con el diseño de la solución, su implementación, su instalación y cómo probarla.
+
+### 5.1 Qué se hizo
+
+Se creó `docs/SOLUCION.md` (nuevo) consolidando: diseño (visión, componentes, diagrama de arquitectura, 3 flujos, decisiones), implementación (tabla de endpoints, pipelines de alta bilingüe, motor de quiz, frontend, notificador, launchd), instalación (básica web y completa macOS con `notifier/install.sh`, desinstalación) y pruebas (suite pytest, curls funcionales, checklist web, prueba interactiva del diálogo, troubleshooting). Se verificó que el comando de tests documentado funciona: `python3 -m pytest backend/tests/ -q` → **47 passed in 0.49s**.
+
+### 5.2 Archivos
+
+- **Nuevos:** `docs/SOLUCION.md`
+- **Modificados:** `docs/BITACORA.md`
+
+### 5.3 Contexto inicial de la sesión
+
+- Rama `main`, con `feature/alta-bilingue` ya mergeada (commit `ecfd236`).
+- Cambio sin commitear al abrir la sesión: `data/words.json` (+228 líneas) — vocabulario agregado por uso real de la app (incluye "ballena"/"tiburón" de la verificación del Paso 4).
+- Pendientes heredados del Paso 4: validación interactiva del diálogo "+ Agregar" → Español, y follow-up `esc()` en `renderWords()`.
