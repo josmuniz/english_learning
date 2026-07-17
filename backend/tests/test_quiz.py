@@ -229,3 +229,62 @@ def test_quiz_answer_invalid_type_and_direction_422(client):
 
 def test_quiz_next_invalid_direction_422(client):
     assert client.get("/api/quiz/next?direction=sideways").status_code == 422
+
+
+# ── mc_image: escena → palabra ───────────────────────────────────────
+
+def _with_image(w, status="approved"):
+    w["image"] = f"images/{w['id']}.png"
+    w["image_status"] = status
+    return w
+
+
+def test_mc_image_eligible_solo_con_imagen_aprobada():
+    words = [make_word(i) for i in range(1, 6)]
+    target = _with_image(words[0])
+    assert "mc_image" in quiz.eligible_types(target, words, ["mc_image"])
+    pending = _with_image(words[1], status="pending")
+    assert "mc_image" not in quiz.eligible_types(pending, words, ["mc_image"])
+    sin_imagen = words[2]
+    assert "mc_image" not in quiz.eligible_types(sin_imagen, words, ["mc_image"])
+
+
+def test_mc_image_no_eligible_con_pocas_palabras():
+    words = [make_word(i) for i in range(1, 3)]
+    target = _with_image(words[0])
+    assert "mc_image" not in quiz.eligible_types(target, words, ["mc_image"])
+
+
+def test_build_question_mc_image():
+    words = [make_word(i) for i in range(1, 6)]
+    target = _with_image(words[0])
+    q = quiz.build_question(target, "mc_image", "both", words)
+    assert q["type"] == "mc_image"
+    assert q["direction"] == "es_to_en"
+    assert q["image_url"] == f"/images/{target['id']}.png"
+    assert target["word_en"] in q["options"] and len(q["options"]) == 4
+    assert target["word_en"] not in q["prompt"]      # la escena no regala la respuesta
+
+
+def test_image_url_de_apoyo_en_tipos_texto():
+    words = [make_word(i) for i in range(1, 6)]
+    target = _with_image(words[0])
+    q = quiz.build_question(target, "typing", "es_to_en", words)
+    assert q["image_url"] == f"/images/{target['id']}.png"
+
+
+def test_sin_image_url_si_pending_o_none():
+    words = [make_word(i) for i in range(1, 6)]
+    pending = _with_image(words[0], status="pending")
+    q = quiz.build_question(pending, "typing", "es_to_en", words)
+    assert "image_url" not in q
+    q2 = quiz.build_question(words[1], "mc_word", "es_to_en", words)
+    assert "image_url" not in q2
+
+
+def test_quiz_next_default_excluye_mc_image():
+    # el notifier llama sin types: el default de main.quiz_next no debe incluirlo
+    import inspect
+    import backend.main as main
+    default = inspect.signature(main.quiz_next).parameters["types"].default
+    assert "mc_image" not in default
