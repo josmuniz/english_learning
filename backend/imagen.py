@@ -16,7 +16,7 @@ GEMINI_URL = (
     f"{GEMINI_MODEL}:generateContent"
 )
 
-QWEN_MODEL = "z-image-turbo"
+QWEN_MODEL = "qwen-image-2.0"
 QWEN_URL = ("https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/"
             "multimodal-generation/generation")
 
@@ -27,13 +27,17 @@ def api_key() -> str:
 
 
 def build_prompt(word: dict) -> str:
-    ctx = word.get("example_en", "")
-    ctx_line = f' Context: "{ctx}".' if ctx else ""
+    # OJO: nunca citar frases entre comillas ni incluir el ejemplo — el modelo
+    # las escribe dentro de la imagen (y regalaría la respuesta del quiz).
+    meaning = word.get("definition_en", "") or word.get("word_es", "")
+    that_is = f", that is: {meaning}" if meaning else ""
     return (
-        "A simple, clean, flat illustration that clearly depicts the meaning of "
-        f'the English expression "{word["word_en"]}" (Spanish: "{word.get("word_es", "")}").'
-        f"{ctx_line} Friendly colors, single clear scene, easy to understand at a "
-        "glance. IMPORTANT: no text, no letters, no words anywhere in the image."
+        "Wordless flat cartoon illustration. STRICT RULE: zero text, zero "
+        "letters, zero numbers, zero captions anywhere in the image (no text). "
+        "Draw only the situation, never write it. Scene to draw: a person "
+        f"acting out the meaning of the English expression {word['word_en']}"
+        f"{that_is}. Express it only through body language, facial expression, "
+        "actions and objects. Simple shapes, friendly colors, one clear scene."
     )
 
 
