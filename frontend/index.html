@@ -143,6 +143,7 @@
     .words-table input { width: 100%; min-width: 90px; box-sizing: border-box; margin-bottom: 4px;
       padding: 4px 6px; font-size: 12px; background: var(--surface); border: 1px solid var(--border);
       border-radius: 4px; color: var(--text); }
+    .words-table input[type="checkbox"] { width: auto; min-width: 0; margin: 0; padding: 0; }
     .icon-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; }
 
     /* Scrollbar */
@@ -525,8 +526,8 @@ function renderWords() {
     <div class="card table-wrap">
       <table class="words-table">
         <thead><tr>
-          <th></th><th>Inglés</th><th>Sonido</th><th>Español</th>
-          <th>Sinónimo</th><th>Antónimo</th><th>Ejemplo</th>
+          <th title="Participa en el quiz">✓</th><th></th><th>Inglés</th><th>Sonido</th>
+          <th>Español</th><th>Sinónimo</th><th>Antónimo</th><th>Ejemplo</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -540,11 +541,20 @@ function pairCell(en, es) {
   return `${esc(en)}${es ? `<span class="sub">${esc(es)}</span>` : ''}`;
 }
 
+const isQuizEnabled = w => w.quiz_enabled !== false;
+
+function quizCheckCell(w, editing = false) {
+  return `<td><input type="checkbox" ${isQuizEnabled(w) ? 'checked' : ''}${editing ? ' disabled' : ''} title="Participa en el quiz"
+    onchange="toggleQuiz('${w.id}', this.checked)" style="cursor:pointer;"></td>`;
+}
+
 function renderRow(w) {
   const wId = w.id.replace(/-/g, '');
   const isPhrase = (w.type || 'word') === 'phrase';
+  const enabled = isQuizEnabled(w);
   return `
-  <tr>
+  <tr${enabled ? '' : ' style="opacity:.45;"'}>
+    ${quizCheckCell(w)}
     <td style="white-space:nowrap;">
       <button class="icon-btn" onclick="startEdit('${w.id}')" title="Editar">✏️</button>
       <button class="icon-btn" onclick="deleteWord('${w.id}')" title="Eliminar" style="color:var(--faint);">✕</button>
@@ -571,6 +581,7 @@ function renderEditRow(w) {
   const isPhrase = (w.type || 'word') === 'phrase';
   return `
   <tr style="background:var(--elevated);">
+    ${quizCheckCell(w, true)}
     <td style="white-space:nowrap;">
       <button class="icon-btn" onclick="saveEdit('${w.id}')" title="Guardar">💾</button>
       <button class="icon-btn" onclick="cancelEdit()" title="Cancelar">✖️</button>
@@ -593,6 +604,25 @@ function renderEditRow(w) {
 function startEdit(id) {
   editingId = id;
   renderWords();
+}
+
+async function toggleQuiz(id, enabled) {
+  try {
+    const res = await fetch(`${API}/api/words/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quiz_enabled: enabled }),
+    });
+    if (!res.ok) throw new Error('respuesta no ok');
+    const updated = await res.json();
+    const i = allWords.findIndex(x => x.id === id);
+    if (i !== -1) allWords[i] = updated;
+    renderWords();
+    updatePracticeSection();
+  } catch (e) {
+    toast('No se pudo actualizar el quiz', 'error');
+    loadWords();
+  }
 }
 
 function cancelEdit() {
@@ -730,15 +760,17 @@ function setAddLang(l) {
 }
 
 function updatePracticeSection() {
-  const has = allWords.length >= 1;
+  const enabled = allWords.filter(isQuizEnabled);
   const btn = document.getElementById('start-practice-btn');
   const hint = document.getElementById('practice-start-hint');
-  btn.disabled = !has;
-  hint.textContent = !has
+  btn.disabled = enabled.length < 1;
+  hint.textContent = allWords.length === 0
     ? 'Necesitas al menos 1 palabra en tu vocabulario para practicar.'
-    : allWords.length < 4
-      ? `Tienes ${allWords.length} palabra(s). Agrega al menos 4 para activar la opción múltiple (por ahora todo será de escribir).`
-      : `Tienes ${allWords.length} palabras listas para practicar.`;
+    : enabled.length === 0
+      ? 'Todas tus palabras están fuera del quiz. Marca el ✓ de alguna en la lista para practicar.'
+      : allWords.length < 4
+        ? `Tienes ${enabled.length} palabra(s) habilitada(s). Agrega al menos 4 para activar la opción múltiple (por ahora todo será de escribir).`
+        : `Tienes ${enabled.length} palabra${enabled.length !== 1 ? 's' : ''} habilitada${enabled.length !== 1 ? 's' : ''} para practicar.`;
 }
 
 // ── Timer ──────────────────────────────────────────────────────────
@@ -942,8 +974,9 @@ function closeQuizModal() {
 
 // ── Practice session ───────────────────────────────────────────────
 function startPractice() {
-  if (allWords.length === 0) return;
-  sessionWords = Math.min(5, Math.max(1, allWords.length));
+  const enabled = allWords.filter(isQuizEnabled);
+  if (enabled.length === 0) return;
+  sessionWords = Math.min(5, Math.max(1, enabled.length));
   sessionIdx = 0; sessionCorrect = 0; sessionWrong = 0;
   document.getElementById('practice-start-section').style.display = 'none';
   document.getElementById('practice-session').style.display = '';

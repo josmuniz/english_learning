@@ -169,6 +169,12 @@ def main() -> int:
     try:
         try:
             q = api("GET", "/api/quiz/next")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                log("skip", "sin palabras habilitadas para el quiz")
+            else:
+                log("error", f"backend respondió HTTP {e.code}")
+            return 0
         except (urllib.error.URLError, OSError) as e:
             log("error", f"backend no disponible: {e}")
             return 0

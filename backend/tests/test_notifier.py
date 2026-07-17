@@ -170,3 +170,18 @@ def test_add_word_flow(sandbox, monkeypatch):
     monkeypatch.setattr(nd, "run_osascript", lambda s: next(outputs))
     assert nd.main() == 0
     assert ("POST", "/api/words", {"word": "break the ice", "lang": "es"}) in api_calls
+
+
+def test_main_404_sin_habilitadas_logs_skip(sandbox, monkeypatch):
+    scripts = []
+    monkeypatch.setattr(nd, "run_osascript", lambda s: scripts.append(s) or "")
+
+    def api_404(method, path, body=None):
+        raise urllib.error.HTTPError(path, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(nd, "api", api_404)
+    assert nd.main() == 0
+    assert scripts == []                    # ningún diálogo
+    log_text = (sandbox / "log").read_text(encoding="utf-8")
+    assert "sin palabras habilitadas" in log_text
+    assert "backend no disponible" not in log_text

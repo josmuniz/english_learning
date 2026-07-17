@@ -145,3 +145,32 @@ def test_patch_word_es_same_entry_ok(client, word_id):
 def test_patch_unknown_id_404_wins_over_validation(client):
     r = client.patch("/api/words/no-existe", json={"word_es": "   "})
     assert r.status_code == 404
+
+
+# ── quiz_enabled: checkbox de participación en el quiz ───────────────
+
+def test_patch_quiz_enabled_bool(client, word_id):
+    r = client.patch(f"/api/words/{word_id}", json={"quiz_enabled": False})
+    assert r.status_code == 200
+    assert r.json()["quiz_enabled"] is False
+    stored = next(w for w in client.get("/api/words").json() if w["id"] == word_id)
+    assert stored["quiz_enabled"] is False
+    r = client.patch(f"/api/words/{word_id}", json={"quiz_enabled": True})
+    assert r.json()["quiz_enabled"] is True
+
+
+def test_quiz_next_excludes_disabled(client, mock_apis):
+    id1 = client.post("/api/words", json={"word": "strong"}).json()["id"]
+    id2 = client.post("/api/words", json={"word": "weak"}).json()["id"]
+    client.patch(f"/api/words/{id1}", json={"quiz_enabled": False})
+    for _ in range(10):
+        q = client.get("/api/quiz/next?types=typing").json()
+        assert q["word_id"] == id2
+
+
+def test_quiz_next_all_disabled_404(client, mock_apis):
+    wid = client.post("/api/words", json={"word": "strong"}).json()["id"]
+    client.patch(f"/api/words/{wid}", json={"quiz_enabled": False})
+    r = client.get("/api/quiz/next")
+    assert r.status_code == 404
+    assert r.json()["detail"] == "No hay palabras habilitadas para el quiz"

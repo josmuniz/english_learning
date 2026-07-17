@@ -69,6 +69,7 @@ class WordRequest(BaseModel):
 
 class WordUpdateRequest(BaseModel):
     word_es: str | None = None
+    quiz_enabled: bool | None = None
     pronunciation_es: str | None = None
     ipa: str | None = None
     synonym_en: str | None = None
@@ -351,7 +352,8 @@ async def delete_word(word_id: str):
 
 @app.patch("/api/words/{word_id}")
 async def update_word(word_id: str, req: WordUpdateRequest):
-    updates = {k: v.strip() for k, v in req.model_dump(exclude_none=True).items()}
+    updates = {k: (v.strip() if isinstance(v, str) else v)
+               for k, v in req.model_dump(exclude_none=True).items()}
 
     words = load_words()
     target = next((w for w in words if w["id"] == word_id), None)
@@ -440,7 +442,12 @@ async def quiz_next(types: str = "mc_word,mc_phrase,cloze,typing",
     words = load_words()
     if not words:
         raise HTTPException(404, "El vocabulario está vacío")
-    word = quiz_engine.pick_word(words)
+    # Solo se preguntan las habilitadas; el vocabulario completo sigue sirviendo
+    # de pool para distractores.
+    pool = [w for w in words if w.get("quiz_enabled", True)]
+    if not pool:
+        raise HTTPException(404, "No hay palabras habilitadas para el quiz")
+    word = quiz_engine.pick_word(pool)
     qtype = quiz_engine.choose_type(word, words, requested)
     return quiz_engine.build_question(word, qtype, direction, words)
 
