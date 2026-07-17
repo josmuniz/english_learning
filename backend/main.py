@@ -340,7 +340,9 @@ async def add_word(req: WordRequest):
     else:
         created = await _build_english_entry(word, words)
     if imagen.api_key():
-        asyncio.create_task(_generate_image_task(created["id"]))
+        task = asyncio.create_task(_generate_image_task(created["id"]))
+        _bg_tasks.add(task)                      # evitar GC del task en vuelo
+        task.add_done_callback(_bg_tasks.discard)
     return created
 
 
@@ -384,6 +386,9 @@ async def update_word(word_id: str, req: WordUpdateRequest):
     return target
 
 
+_bg_tasks: set = set()   # referencias vivas a tasks en background (evita GC)
+
+
 async def _generate_image_task(word_id: str):
     """Genera la escena en background tras el alta. Best-effort: loguea y sigue."""
     words = load_words()
@@ -420,10 +425,13 @@ async def generate_word_image(word_id: str):
     (IMAGES_DIR / f"{word_id}.png").write_bytes(png)
     words = load_words()
     target = next((w for w in words if w["id"] == word_id), None)
-    if target is not None:
-        target["image"] = f"images/{word_id}.png"
-        target["image_status"] = "pending"
-        save_words(words)
+    if target is None:
+        # la palabra fue borrada mientras se generaba
+        (IMAGES_DIR / f"{word_id}.png").unlink(missing_ok=True)
+        raise HTTPException(404, "Palabra no encontrada")
+    target["image"] = f"images/{word_id}.png"
+    target["image_status"] = "pending"
+    save_words(words)
     return target
 
 
