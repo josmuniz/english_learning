@@ -209,16 +209,16 @@
       <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">Agregar palabra</h2>
       <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">Escribe una palabra o frase en inglés; se genera traducción y, para palabras, sinónimo y ejemplo.</p>
       <div style="display:flex; gap:12px; align-items:center;">
+        <button id="add-btn" class="btn-primary" onclick="addWord()" style="white-space:nowrap; display:flex; align-items:center; gap:8px;">
+          <span id="add-btn-text">+ Agregar</span>
+          <span id="add-spinner" class="spinner" style="display:none;"></span>
+        </button>
         <div style="display:flex; gap:6px;">
           <button class="btn-ghost" id="lang-en" onclick="setAddLang('en')" style="padding:8px 12px;">🇬🇧 EN</button>
           <button class="btn-ghost" id="lang-es" onclick="setAddLang('es')" style="padding:8px 12px;">🇪🇸 ES</button>
         </div>
         <input id="word-input" class="inp" type="text" placeholder="Ej: perseverance, break the ice…"
           style="flex:1;" onkeydown="if(event.key==='Enter') addWord()"/>
-        <button id="add-btn" class="btn-primary" onclick="addWord()" style="white-space:nowrap; display:flex; align-items:center; gap:8px;">
-          <span id="add-btn-text">+ Agregar</span>
-          <span id="add-spinner" class="spinner" style="display:none;"></span>
-        </button>
       </div>
       <div id="add-error" style="margin-top:10px; font-size:13px; color:var(--red); display:none;"></div>
     </div>
@@ -525,8 +525,8 @@ function renderWords() {
     <div class="card table-wrap">
       <table class="words-table">
         <thead><tr>
-          <th>Inglés</th><th>Sonido</th><th>Español</th>
-          <th>Sinónimo</th><th>Antónimo</th><th>Ejemplo</th><th></th>
+          <th></th><th>Inglés</th><th>Sonido</th><th>Español</th>
+          <th>Sinónimo</th><th>Antónimo</th><th>Ejemplo</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -545,6 +545,10 @@ function renderRow(w) {
   const isPhrase = (w.type || 'word') === 'phrase';
   return `
   <tr>
+    <td style="white-space:nowrap;">
+      <button class="icon-btn" onclick="startEdit('${w.id}')" title="Editar">✏️</button>
+      <button class="icon-btn" onclick="deleteWord('${w.id}')" title="Eliminar" style="color:var(--faint);">✕</button>
+    </td>
     <td style="font-weight:600; color:var(--accent);">
       ${esc(w.word_en)}
       <button class="speak-btn" id="spk-${wId}" onclick="speakById('${w.id}','spk-${wId}')" title="Escuchar">🔊</button>
@@ -556,10 +560,6 @@ function renderRow(w) {
       : `<td>${pairCell(w.synonym_en, w.synonym_es)}</td>
          <td>${pairCell(w.antonym_en, w.antonym_es)}</td>
          <td>${pairCell(w.example_en, w.example_es)}</td>`}
-    <td style="white-space:nowrap; text-align:right;">
-      <button class="icon-btn" onclick="startEdit('${w.id}')" title="Editar">✏️</button>
-      <button class="icon-btn" onclick="deleteWord('${w.id}')" title="Eliminar" style="color:var(--faint);">✕</button>
-    </td>
   </tr>`;
 }
 
@@ -571,9 +571,13 @@ function renderEditRow(w) {
   const isPhrase = (w.type || 'word') === 'phrase';
   return `
   <tr style="background:var(--elevated);">
+    <td style="white-space:nowrap;">
+      <button class="icon-btn" onclick="saveEdit('${w.id}')" title="Guardar">💾</button>
+      <button class="icon-btn" onclick="cancelEdit()" title="Cancelar">✖️</button>
+      <span id="edit-error" class="sub" style="color:var(--red); max-width:140px;"></span>
+    </td>
     <td style="font-weight:600; color:var(--accent);">${esc(w.word_en)}</td>
-    <td>${editInput('pronunciation_es', w.pronunciation_es, 'sonido')}
-        ${editInput('ipa', w.ipa, 'IPA')}</td>
+    <td>${editInput('pronunciation_es', w.pronunciation_es, 'escribe cómo suena')}</td>
     <td>${editInput('word_es', w.word_es, 'traducción')}</td>
     ${isPhrase
       ? `<td colspan="3" style="color:var(--faint); font-size:12px;">— no aplica a frases —</td>`
@@ -583,11 +587,6 @@ function renderEditRow(w) {
              ${editInput('antonym_es', w.antonym_es, 'ES')}</td>
          <td>${editInput('example_en', w.example_en, 'EN (≤10 palabras)')}
              ${editInput('example_es', w.example_es, 'ES')}</td>`}
-    <td style="white-space:nowrap; text-align:right;">
-      <button class="icon-btn" onclick="saveEdit('${w.id}')" title="Guardar">💾</button>
-      <button class="icon-btn" onclick="cancelEdit()" title="Cancelar">✖️</button>
-      <span id="edit-error" class="sub" style="color:var(--red); max-width:140px;"></span>
-    </td>
   </tr>`;
 }
 
@@ -601,7 +600,7 @@ function cancelEdit() {
   renderWords();
 }
 
-const EDIT_FIELDS_PHRASE = ['word_es', 'pronunciation_es', 'ipa'];
+const EDIT_FIELDS_PHRASE = ['word_es', 'pronunciation_es'];
 const EDIT_FIELDS_WORD = [...EDIT_FIELDS_PHRASE, 'synonym_en', 'synonym_es',
                           'antonym_en', 'antonym_es', 'example_en', 'example_es'];
 

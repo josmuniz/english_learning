@@ -54,8 +54,12 @@ En `fetch_dictionary()` (`backend/main.py`):
 Layout de tabla (reemplaza las tarjetas), columnas en este orden:
 
 ```
-| Inglés | Sonido | Español | Sinónimo | Antónimo | Ejemplo | ✏️ 🗑 |
+| ✏️ 🗑 | Inglés | Sonido | Español | Sinónimo | Antónimo | Ejemplo |
 ```
+
+(Ajuste 2026-07-17: acciones en la primera columna, a pedido del usuario. El campo Sonido se
+edita como texto libre — sin input IPA en la UI de edición; `ipa` sigue en la lista blanca
+del backend pero solo se muestra como subtexto informativo.)
 
 - **Inglés** = `word_en`; **Sonido** = `pronunciation_es` (con IPA como tooltip/subtexto si
   existe); **Español** = `word_es`; **Sinónimo/Antónimo** = par EN (ES como subtexto);
