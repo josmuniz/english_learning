@@ -47,7 +47,10 @@ async def generate_scene(word: dict) -> bytes:
     if not candidates:
         reason = data.get("promptFeedback", {}).get("blockReason", "sin candidatos")
         raise RuntimeError(f"Gemini no devolvió imagen: {reason}")
-    for part in candidates[0].get("content", {}).get("parts", []):
-        if "inlineData" in part:
-            return base64.b64decode(part["inlineData"]["data"])
+    content = candidates[0].get("content") or {}
+    parts = content.get("parts", []) if isinstance(content, dict) else []
+    for part in parts:
+        if "inlineData" in part and isinstance(part.get("inlineData"), dict):
+            if "data" in part["inlineData"]:
+                return base64.b64decode(part["inlineData"]["data"])
     raise RuntimeError("Respuesta de Gemini sin inlineData")

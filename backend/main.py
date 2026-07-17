@@ -418,9 +418,12 @@ async def generate_word_image(word_id: str):
     except Exception as e:
         raise HTTPException(502, f"No se pudo generar la imagen: {e}")
     (IMAGES_DIR / f"{word_id}.png").write_bytes(png)
-    target["image"] = f"images/{word_id}.png"
-    target["image_status"] = "pending"
-    save_words(words)
+    words = load_words()
+    target = next((w for w in words if w["id"] == word_id), None)
+    if target is not None:
+        target["image"] = f"images/{word_id}.png"
+        target["image_status"] = "pending"
+        save_words(words)
     return target
 
 
