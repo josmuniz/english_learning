@@ -133,7 +133,17 @@
     }
 
     /* Grid for word list */
-    .words-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .table-wrap { overflow-x: auto; }
+    .words-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .words-table th { text-align: left; padding: 8px 10px; font-size: 11px; color: var(--faint);
+      text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .words-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .words-table tbody tr:last-child td { border-bottom: none; }
+    .words-table .sub { display: block; font-size: 11px; color: var(--muted); }
+    .words-table input { width: 100%; min-width: 90px; box-sizing: border-box; margin-bottom: 4px;
+      padding: 4px 6px; font-size: 12px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); }
+    .icon-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; }
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 5px; }
@@ -219,7 +229,7 @@
     </div>
 
     <!-- Words grid -->
-    <div id="words-grid" class="words-grid" style="display:none;"></div>
+    <div id="words-grid" style="display:none;"></div>
   </div>
 
 
@@ -482,10 +492,11 @@ async function loadWords() {
 }
 
 // ── Render word cards ──────────────────────────────────────────────
-function highlightWord(sentence, word) {
-  if (!sentence || !word) return sentence || '';
-  const re = new RegExp(`(${word})`, 'gi');
-  return sentence.replace(re, '<span class="highlight">$1</span>');
+let editingId = null;
+
+function speakById(id, btnId) {
+  const w = allWords.find(x => x.id === id);
+  if (w) speak(w.word_en, 'en-US', btnId);
 }
 
 function renderWords() {
@@ -505,78 +516,127 @@ function renderWords() {
   badge.style.display = '';
   badge.textContent = `${allWords.length} palabra${allWords.length !== 1 ? 's' : ''}`;
 
-  grid.innerHTML = allWords.slice().reverse().map(w => {
-    const pct = w.times_practiced > 0 ? Math.round(w.times_correct / w.times_practiced * 100) : null;
-    const exampleHL = highlightWord(w.example_en, w.word_en);
-    const pron = w.pronunciation_es ? `<span class="pronunciation">(${w.pronunciation_es})</span>` : '';
-    const pronEx = w.example_pronunciation_es ? `<span class="pronunciation" style="display:block;margin-top:2px;">${w.example_pronunciation_es}</span>` : '';
-    const wId = w.id.replace(/-/g,'');
-    return `
-    <div class="card word-card" style="padding:20px;">
-      <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:12px;">
-        <div>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; flex-wrap:wrap;">
-            <span style="font-size:22px; font-weight:700; color:var(--accent);">${w.word_en}</span>
-            ${pron}
-            <button class="speak-btn" id="spk-${wId}" onclick="speak('${w.word_en}','en-US','spk-${wId}')" title="Escuchar palabra">🔊</button>
-            <span class="badge badge-type">${w.type || 'word'}</span>
-          </div>
-          <span style="font-size:15px; color:var(--text);">${w.word_es}</span>
-        </div>
-        <button onclick="deleteWord('${w.id}')" title="Eliminar"
-          style="background:none; border:none; cursor:pointer; color:var(--faint); font-size:16px; padding:4px; transition:color .15s;"
-          onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--faint)'">✕</button>
-      </div>
+  const rows = allWords.slice().reverse()
+    .map(w => (editingId === w.id ? renderEditRow(w) : renderRow(w))).join('');
 
-      <div class="card-elevated" style="padding:10px 12px; margin-bottom:10px;">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-          <!-- Sinónimo -->
-          <div>
-            <p style="font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px;">Sinónimo</p>
-            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              ${w.synonym_en
-                ? `<span style="font-size:13px; font-weight:600; color:var(--accent);">${w.synonym_en}</span>
-                   <button class="speak-btn" onclick="speak('${w.synonym_en}','en-US',null)" title="Escuchar">🔊</button>
-                   ${w.synonym_es ? `<span style="font-size:12px; color:var(--muted);">· ${w.synonym_es}</span>` : ''}`
-                : `<span style="font-size:13px; color:var(--faint);">—</span>`}
-            </div>
-          </div>
-          <!-- Antónimo -->
-          <div>
-            <p style="font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px;">Antónimo</p>
-            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              ${w.antonym_en
-                ? `<span style="font-size:13px; font-weight:600; color:var(--red);">${w.antonym_en}</span>
-                   <button class="speak-btn" onclick="speak('${w.antonym_en}','en-US',null)" title="Escuchar">🔊</button>
-                   ${w.antonym_es ? `<span style="font-size:12px; color:var(--muted);">· ${w.antonym_es}</span>` : ''}`
-                : `<span style="font-size:13px; color:var(--faint);">—</span>`}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <p style="font-size:12px; color:var(--muted); margin-bottom:6px;">${w.definition_es || ''}</p>
-
-      <div style="background:var(--elevated); border-radius:6px; padding:10px 12px; margin-bottom:10px; border-left:3px solid var(--accent);">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
-          <p style="font-size:12px; color:var(--faint);">Ejemplo:</p>
-          <button class="speak-btn" id="spkex-${wId}" onclick="speak(${JSON.stringify(w.example_en)},'en-US','spkex-${wId}')" title="Escuchar frase">🔊 frase</button>
-        </div>
-        <p style="font-size:13px; font-style:italic;">${exampleHL}</p>
-        ${pronEx}
-        <p style="font-size:12px; color:var(--muted); margin-top:4px;">${w.example_es || ''}</p>
-      </div>
-
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-size:11px; color:var(--faint);">
-          ${w.times_practiced > 0
-            ? `Practicado ${w.times_practiced}× · ${pct}% correcto`
-            : 'Sin practicar aún'}
-        </span>
-        <span style="font-size:11px; color:var(--faint);">${new Date(w.created_at).toLocaleDateString('es-CL')}</span>
-      </div>
+  grid.innerHTML = `
+    <div class="card table-wrap">
+      <table class="words-table">
+        <thead><tr>
+          <th>Inglés</th><th>Sonido</th><th>Español</th>
+          <th>Sinónimo</th><th>Antónimo</th><th>Ejemplo</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>`;
-  }).join('');
+}
+
+const DASH = '<span style="color:var(--faint);">—</span>';
+
+function pairCell(en, es) {
+  if (!en) return DASH;
+  return `${esc(en)}${es ? `<span class="sub">${esc(es)}</span>` : ''}`;
+}
+
+function renderRow(w) {
+  const wId = w.id.replace(/-/g, '');
+  const isPhrase = (w.type || 'word') === 'phrase';
+  return `
+  <tr>
+    <td style="font-weight:600; color:var(--accent);">
+      ${esc(w.word_en)}
+      <button class="speak-btn" id="spk-${wId}" onclick="speakById('${w.id}','spk-${wId}')" title="Escuchar">🔊</button>
+    </td>
+    <td>${w.pronunciation_es ? esc(w.pronunciation_es) : DASH}${w.ipa ? `<span class="sub">${esc(w.ipa)}</span>` : ''}</td>
+    <td>${esc(w.word_es || '')}</td>
+    ${isPhrase
+      ? `<td>${DASH}</td><td>${DASH}</td><td>${DASH}</td>`
+      : `<td>${pairCell(w.synonym_en, w.synonym_es)}</td>
+         <td>${pairCell(w.antonym_en, w.antonym_es)}</td>
+         <td>${pairCell(w.example_en, w.example_es)}</td>`}
+    <td style="white-space:nowrap; text-align:right;">
+      <button class="icon-btn" onclick="startEdit('${w.id}')" title="Editar">✏️</button>
+      <button class="icon-btn" onclick="deleteWord('${w.id}')" title="Eliminar" style="color:var(--faint);">✕</button>
+    </td>
+  </tr>`;
+}
+
+function editInput(name, val, ph) {
+  return `<input id="edit-${name}" value="${esc(val || '')}" placeholder="${ph}">`;
+}
+
+function renderEditRow(w) {
+  const isPhrase = (w.type || 'word') === 'phrase';
+  return `
+  <tr style="background:var(--elevated);">
+    <td style="font-weight:600; color:var(--accent);">${esc(w.word_en)}</td>
+    <td>${editInput('pronunciation_es', w.pronunciation_es, 'sonido')}
+        ${editInput('ipa', w.ipa, 'IPA')}</td>
+    <td>${esc(w.word_es || '')}</td>
+    ${isPhrase
+      ? `<td colspan="3" style="color:var(--faint); font-size:12px;">— no aplica a frases —</td>`
+      : `<td>${editInput('synonym_en', w.synonym_en, 'EN')}
+             ${editInput('synonym_es', w.synonym_es, 'ES')}</td>
+         <td>${editInput('antonym_en', w.antonym_en, 'EN')}
+             ${editInput('antonym_es', w.antonym_es, 'ES')}</td>
+         <td>${editInput('example_en', w.example_en, 'EN (≤10 palabras)')}
+             ${editInput('example_es', w.example_es, 'ES')}</td>`}
+    <td style="white-space:nowrap; text-align:right;">
+      <button class="icon-btn" onclick="saveEdit('${w.id}')" title="Guardar">💾</button>
+      <button class="icon-btn" onclick="cancelEdit()" title="Cancelar">✖️</button>
+      <span id="edit-error" class="sub" style="color:var(--red); max-width:140px;"></span>
+    </td>
+  </tr>`;
+}
+
+function startEdit(id) {
+  editingId = id;
+  renderWords();
+}
+
+function cancelEdit() {
+  editingId = null;
+  renderWords();
+}
+
+const EDIT_FIELDS_WORD = ['pronunciation_es', 'ipa', 'synonym_en', 'synonym_es',
+                          'antonym_en', 'antonym_es', 'example_en', 'example_es'];
+const EDIT_FIELDS_PHRASE = ['pronunciation_es', 'ipa'];
+
+async function saveEdit(id) {
+  const w = allWords.find(x => x.id === id);
+  if (!w) return;
+  const isPhrase = (w.type || 'word') === 'phrase';
+  const fields = isPhrase ? EDIT_FIELDS_PHRASE : EDIT_FIELDS_WORD;
+
+  const body = {};
+  for (const f of fields) {
+    const el = document.getElementById(`edit-${f}`);
+    if (el) body[f] = el.value.trim();
+  }
+
+  try {
+    const res = await fetch(`${API}/api/words/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      // mostrar el error en la fila sin re-render (no perder lo tecleado)
+      document.getElementById('edit-error').textContent =
+        typeof err.detail === 'string' ? err.detail : 'Error al guardar';
+      return;
+    }
+    const updated = await res.json();
+    const i = allWords.findIndex(x => x.id === id);
+    if (i !== -1) allWords[i] = updated;
+    editingId = null;
+    renderWords();
+    toast('Cambios guardados', 'success');
+  } catch (e) {
+    document.getElementById('edit-error').textContent = 'Sin conexión con el servidor';
+  }
 }
 
 // ── Add word ───────────────────────────────────────────────────────
