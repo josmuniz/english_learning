@@ -13,13 +13,16 @@ quiere cortos (≤10 palabras).
 
 ## Alcance
 
-1. **Edición inline** de campos de cualquier entrada (palabra o frase) desde la lista web.
-2. Campos editables: `pronunciation_es`, `ipa`, `synonym_en`, `synonym_es`, `antonym_en`,
-   `antonym_es`, `example_en`, `example_es`.
-3. Campos NO editables (protegidos): `id`, `created_at`, `word_en`, `word_es`, `type`,
+1. **Vista de grilla** (tipo planilla Excel) que reemplaza la lista de tarjetas: una fila por
+   entrada, columnas hacia la derecha para aprovechar la pantalla.
+2. **Edición inline por fila** de campos de cualquier entrada (palabra o frase).
+3. Campos editables: `pronunciation_es`, `ipa`, `synonym_en`, `synonym_es`, `antonym_en`,
+   `antonym_es`, `example_en`, `example_es`. En **frases** solo `pronunciation_es` e `ipa`
+   (sinónimo/antónimo/ejemplo no aplican a frases y no se muestran ni se editan).
+4. Campos NO editables (protegidos): `id`, `created_at`, `word_en`, `word_es`, `type`,
    `definition_en`, `definition_es`, `times_practiced`, `times_correct`.
-4. **Ejemplos cortos al generar:** el pipeline elige ejemplos de ≤10 palabras.
-5. Sin cambios en el quiz ni en el notifier (leen los mismos campos de `words.json`).
+5. **Ejemplos cortos al generar:** el pipeline elige ejemplos de ≤10 palabras.
+6. Sin cambios en el quiz ni en el notifier (leen los mismos campos de `words.json`).
 
 ## Diseño
 
@@ -32,6 +35,8 @@ quiere cortos (≤10 palabras).
   `"El ejemplo no puede superar 10 palabras"`.
 - `404` si `word_id` no existe.
 - Respuesta: la entrada completa actualizada.
+- El endpoint es genérico por tipo: la restricción "frases sin sinónimo/antónimo/ejemplo" se
+  aplica en la UI (no ofrece esos inputs), no en el backend.
 
 ### 2. Pipeline — selector de ejemplos cortos
 
@@ -43,18 +48,28 @@ En `fetch_dictionary()` (`backend/main.py`):
 - Los ejemplos de fallback sintéticos ya cumplen (≤6 palabras).
 - `example_es` hereda el ejemplo corto porque se traduce después.
 
-### 3. Frontend — edición inline en `renderWords()` (`frontend/index.html`)
+### 3. Frontend — grilla con edición inline por fila (`renderWords()`, `frontend/index.html`)
 
-- Botón ✏️ junto al 🗑 de cada tarjeta.
-- Estado `editingId` (una tarjeta en edición a la vez). ✏️ sobre otra tarjeta cambia el foco de
-  edición; Cancelar limpia el estado.
-- En modo edición la tarjeta muestra inputs prefilled con: pronunciación (`pronunciation_es`),
-  IPA, sinónimo EN/ES, antónimo EN/ES, ejemplo EN/ES + botones Guardar/Cancelar. Los campos
-  vacíos (caso típico: frase sin pronunciación) aparecen como inputs vacíos listos para
-  completar.
+Layout de tabla (reemplaza las tarjetas), columnas en este orden:
+
+```
+| Inglés | Sonido | Español | Sinónimo | Antónimo | Ejemplo | ✏️ 🗑 |
+```
+
+- **Inglés** = `word_en`; **Sonido** = `pronunciation_es` (con IPA como tooltip/subtexto si
+  existe); **Español** = `word_es`; **Sinónimo/Antónimo** = par EN (ES como subtexto);
+  **Ejemplo** = `example_en` (ES como subtexto).
+- **Frases** (`type: "phrase"`): las celdas Sinónimo/Antónimo/Ejemplo van vacías (—) y no son
+  editables.
+- Filas compactas, tabla con scroll horizontal propio si no cabe (la página no scrollea
+  lateral).
+- Botón ✏️ por fila. Estado `editingId` (una fila en edición a la vez); ✏️ en otra fila mueve
+  el foco; Cancelar limpia. En edición, las celdas editables se vuelven inputs prefilled
+  (para palabras: sonido, IPA, sinónimo EN/ES, antónimo EN/ES, ejemplo EN/ES; para frases:
+  solo sonido e IPA) + Guardar/Cancelar en la columna de acciones. Los campos vacíos (caso
+  típico: frase sin pronunciación) aparecen como inputs vacíos listos para completar.
 - Guardar → `PATCH /api/words/{id}` → actualizar el objeto en la lista local → re-render.
-- Error del backend (ej. >10 palabras) → mostrar el mensaje en la tarjeta sin perder lo
-  tecleado.
+- Error del backend (ej. >10 palabras) → mostrar el mensaje en la fila sin perder lo tecleado.
 - **Hardening incluido:** aplicar `esc()` a todos los campos interpolados en `renderWords()`
   (cierra el follow-up XSS pendiente de fase 1).
 
@@ -72,5 +87,6 @@ En `fetch_dictionary()` (`backend/main.py`):
 ### 5. Verificación funcional
 
 - Suite completa pytest (47 existentes + nuevos) en verde.
-- Flujo real en browser: editar pronunciación de una frase sin pronunciación, guardar,
+- Flujo real en browser: la grilla renderiza con las columnas en orden (frases sin
+  sinónimo/antónimo/ejemplo), editar pronunciación de una frase sin pronunciación, guardar,
   recargar y confirmar persistencia.
