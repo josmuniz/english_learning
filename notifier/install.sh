@@ -27,6 +27,19 @@ INTERVAL=$(( 10#$MINUTES * 60 ))
 
 mkdir -p "$AGENTS_DIR" "$HOME/Library/Logs"
 
+# GEMINI_API_KEY para la generación de escenas: se inyecta al plist del backend
+# (launchd no lee ~/.zshrc). El plist vive fuera del repo; la key no toca git.
+GEMINI_KEY_XML=""
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+  # escapar XML por robustez (las keys reales son [A-Za-z0-9_-])
+  GEMINI_KEY_ESC="${GEMINI_API_KEY//&/&amp;}"
+  GEMINI_KEY_ESC="${GEMINI_KEY_ESC//</&lt;}"
+  GEMINI_KEY_ESC="${GEMINI_KEY_ESC//>/&gt;}"
+  GEMINI_KEY_XML="<key>EnvironmentVariables</key><dict><key>GEMINI_API_KEY</key><string>${GEMINI_KEY_ESC}</string></dict>"
+else
+  echo "AVISO: GEMINI_API_KEY no está en el entorno; la generación de imágenes quedará deshabilitada en el backend de launchd." >&2
+fi
+
 cat > "$BACKEND_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -37,6 +50,7 @@ cat > "$BACKEND_PLIST" <<EOF
     <string>$PROJECT_DIR/start.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
+  ${GEMINI_KEY_XML}
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$HOME/Library/Logs/elearn-backend.log</string>

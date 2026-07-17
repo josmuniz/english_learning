@@ -296,3 +296,35 @@ curl -s -X PATCH http://localhost:8003/api/words/<id> \
 ### 6.5 Próximo paso
 
 Validación interactiva del diálogo "+ Agregar" → Español (pendiente heredado). Follow-ups cosméticos anotados: CSS muerto `.word-card`/`.highlight`, label a11y del th de acciones, overflow móvil de tabs.
+
+---
+
+## Paso 7 · Escenas por palabra con validación + quiz visual (2026-07-17)
+
+**Meta:** Imagen/escena generada con IA por palabra/frase, validada por el usuario, usada en el quiz web como tipo nuevo y como apoyo visual.
+
+### 7.1 Qué se hizo
+
+- `backend/imagen.py`: cliente REST de Gemini (`gemini-3.1-flash-image-preview`) aislado y mockeable; prompt que ilustra la palabra sin texto en la imagen.
+- Storage `data/images/` servido en `/images`; campos `image` + `image_status` (`none|pending|approved`).
+- Generación en background al agregar palabra (sin demorar el alta; referencias anti-GC), `POST /api/words/{id}/image` (regenerar; 503 sin key, 502 si falla) y `PUT /api/words/{id}/image/status` (aprobar/descartar con borrado de archivo). Borrar una palabra elimina su PNG.
+- Quiz: tipo `mc_image` (escena → elegir la palabra entre 4; solo imágenes aprobadas; fuerza es→en) y `image_url` de apoyo en todos los tipos. El default de `/api/quiz/next` excluye `mc_image` → el popup nativo (AppleScript, sin soporte de imágenes) queda intacto.
+- Web: columna 🖼 con miniatura y badge "pendiente", lightbox de validación ("✓ La entiendo (aprobar)" / regenerar / descartar), botón "🎨 Generar faltantes" secuencial con progreso, y render de escenas en la práctica.
+- `install.sh` inyecta `GEMINI_API_KEY` (escapada) al plist del backend — launchd no lee `~/.zshrc`; la key nunca toca el repo (público).
+
+### 7.2 Archivos
+
+- **Nuevos:** `backend/imagen.py`, `backend/tests/test_imagen.py`
+- **Modificados:** `backend/main.py`, `backend/quiz.py`, `backend/tests/test_quiz.py`, `frontend/index.html`, `notifier/install.sh`
+
+### 7.3 Tests
+
+`python3 -m pytest backend/tests/ -q` → **88 passed** (70 previos + 12 imagen + 6 quiz visual). Gemini siempre mockeado en tests. Verificación browser (Playwright): columna, 503 sin key, lightbox aprobar/descartar (archivo borrado del disco), pregunta `mc_image` respondida, consola limpia. Reviews: por task + final de rama (opus) + security: **PASS with notes**, ready to merge.
+
+### 7.4 Pendiente
+
+La `GEMINI_API_KEY` del entorno resultó inválida para la API de Gemini (401 `ACCESS_TOKEN_TYPE_UNSUPPORTED`) — la generación real queda pendiente de una key de AI Studio válida; con ella: actualizar `~/.zshrc` y correr `bash notifier/install.sh` para inyectarla a launchd. Todo lo demás está verificado.
+
+### 7.5 Próximo paso
+
+Sonido (pronunciación) visible al revelar respuestas del quiz (pedido del usuario). Features en cola: panel de control (spec esperando review), motor adaptativo.

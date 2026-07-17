@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from backend import quiz as quiz_engine
+from backend import imagen
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -19,6 +20,8 @@ DICT_API      = "https://api.dictionaryapi.dev/api/v2/entries/en"
 TRANS_API     = "https://api.mymemory.translated.net/get"
 DATAMUSE_API  = "https://api.datamuse.com/words"
 DATA_FILE     = Path(__file__).parent.parent / "data" / "words.json"
+IMAGES_DIR    = Path(__file__).parent.parent / "data" / "images"
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── IPA → Spanish phonetic approximation ─────────────────────────────────────
@@ -88,6 +91,9 @@ class QuizAnswerRequest(BaseModel):
     type: str        # mc_word | mc_phrase | cloze | typing
     direction: str   # es_to_en | en_to_es
     answer: str
+
+class ImageStatusRequest(BaseModel):
+    status: str
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -328,11 +334,16 @@ async def add_word(req: WordRequest):
         raise HTTPException(409, "Esa palabra ya está en tu vocabulario")
 
     if req.lang == "es":
-        return await _add_from_spanish(word, words)
-
-    if " " in word:
-        return await _add_phrase(word, None, words)
-    return await _build_english_entry(word, words)
+        created = await _add_from_spanish(word, words)
+    elif " " in word:
+        created = await _add_phrase(word, None, words)
+    else:
+        created = await _build_english_entry(word, words)
+    if imagen.api_key():
+        task = asyncio.create_task(_generate_image_task(created["id"]))
+        _bg_tasks.add(task)                      # evitar GC del task en vuelo
+        task.add_done_callback(_bg_tasks.discard)
+    return created
 
 
 @app.get("/api/words")
@@ -347,6 +358,7 @@ async def delete_word(word_id: str):
     if len(new) == len(words):
         raise HTTPException(404, "Palabra no encontrada")
     save_words(new)
+    (IMAGES_DIR / f"{word_id}.png").unlink(missing_ok=True)   # sin PNGs huérfanos
     return {"ok": True}
 
 
@@ -371,6 +383,77 @@ async def update_word(word_id: str, req: WordUpdateRequest):
             raise HTTPException(409, "Esa traducción ya existe en tu vocabulario")
 
     target.update(updates)
+    save_words(words)
+    return target
+
+
+_bg_tasks: set = set()   # referencias vivas a tasks en background (evita GC)
+
+
+async def _generate_image_task(word_id: str):
+    """Genera la escena en background tras el alta. Best-effort: loguea y sigue."""
+    words = load_words()
+    target = next((w for w in words if w["id"] == word_id), None)
+    if target is None:
+        return
+    try:
+        png = await imagen.generate_scene(target)
+    except Exception as e:
+        print(f"[imagen] fallo generando '{target.get('word_en', '')}': {e}")
+        return
+    (IMAGES_DIR / f"{word_id}.png").write_bytes(png)
+    words = load_words()
+    for w in words:
+        if w["id"] == word_id:
+            w["image"] = f"images/{word_id}.png"
+            w["image_status"] = "pending"
+            save_words(words)
+            return
+    # la palabra fue borrada mientras se generaba: no dejar PNG huérfano
+    (IMAGES_DIR / f"{word_id}.png").unlink(missing_ok=True)
+
+
+@app.post("/api/words/{word_id}/image")
+async def generate_word_image(word_id: str):
+    if not imagen.api_key():
+        raise HTTPException(503, "Generación de imágenes no configurada (GEMINI_API_KEY)")
+    words = load_words()
+    target = next((w for w in words if w["id"] == word_id), None)
+    if target is None:
+        raise HTTPException(404, "Palabra no encontrada")
+    try:
+        png = await imagen.generate_scene(target)
+    except Exception as e:
+        raise HTTPException(502, f"No se pudo generar la imagen: {e}")
+    (IMAGES_DIR / f"{word_id}.png").write_bytes(png)
+    words = load_words()
+    target = next((w for w in words if w["id"] == word_id), None)
+    if target is None:
+        # la palabra fue borrada mientras se generaba
+        (IMAGES_DIR / f"{word_id}.png").unlink(missing_ok=True)
+        raise HTTPException(404, "Palabra no encontrada")
+    target["image"] = f"images/{word_id}.png"
+    target["image_status"] = "pending"
+    save_words(words)
+    return target
+
+
+@app.put("/api/words/{word_id}/image/status")
+async def set_image_status(word_id: str, req: ImageStatusRequest):
+    if req.status not in ("approved", "none"):
+        raise HTTPException(422, "Estado inválido (approved|none)")
+    words = load_words()
+    target = next((w for w in words if w["id"] == word_id), None)
+    if target is None:
+        raise HTTPException(404, "Palabra no encontrada")
+    if req.status == "none":
+        (IMAGES_DIR / f"{word_id}.png").unlink(missing_ok=True)
+        target["image"] = ""
+        target["image_status"] = "none"
+    else:
+        if not target.get("image"):
+            raise HTTPException(409, "La palabra no tiene imagen para aprobar")
+        target["image_status"] = "approved"
     save_words(words)
     return target
 
@@ -475,6 +558,9 @@ async def quiz_answer(req: QuizAnswerRequest):
 
     return {"correct": is_correct, "correct_answer": expected, "word": word}
 
+
+# ── Images ───────────────────────────────────────────────────────────────────
+app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
 # ── Static frontend (must be last) ────────────────────────────────────────────
 _frontend = Path(__file__).parent.parent / "frontend"

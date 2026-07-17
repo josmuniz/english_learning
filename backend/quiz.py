@@ -3,7 +3,7 @@ import random
 import re
 import unicodedata
 
-ALL_TYPES = ["mc_word", "mc_phrase", "cloze", "typing"]
+ALL_TYPES = ["mc_word", "mc_phrase", "cloze", "typing", "mc_image"]
 
 _ARTICLES = re.compile(r"^(el|la|los|las|un|una|unos|unas|the|a|an)\s+", re.IGNORECASE)
 
@@ -64,6 +64,9 @@ def eligible_types(word: dict, all_words: list, requested: list) -> list:
             continue
         elif t == "mc_word":
             out.append(t)
+        elif t == "mc_image":
+            if word.get("image_status", "none") == "approved":
+                out.append(t)
         elif t == "cloze":
             if word.get("example_en") and word["word_en"].lower() in word["example_en"].lower():
                 out.append(t)
@@ -90,7 +93,7 @@ def pick_distractors(word: dict, all_words: list, rng=random, need_example: bool
 
 
 def build_question(word: dict, qtype: str, direction: str, all_words: list, rng=random) -> dict:
-    if qtype == "cloze":
+    if qtype in ("cloze", "mc_image"):
         resolved = "es_to_en"          # la respuesta es la palabra en inglés
     elif direction == "both":
         resolved = rng.choice(["es_to_en", "en_to_es"])
@@ -109,7 +112,7 @@ def build_question(word: dict, qtype: str, direction: str, all_words: list, rng=
         q["prompt"] = word["word_es"] if resolved == "es_to_en" else word["word_en"]
         if resolved == "en_to_es" and word.get("pronunciation_es"):
             q["prompt_secondary"] = f'({word["pronunciation_es"]})'
-        return q
+        return _attach_image(q, word)
 
     if qtype == "mc_word":
         distractors = pick_distractors(word, all_words, rng)
@@ -121,6 +124,10 @@ def build_question(word: dict, qtype: str, direction: str, all_words: list, rng=
         else:
             q["prompt"] = word["word_es"]
             opts = [word["word_en"]] + [d["word_en"] for d in distractors]
+    elif qtype == "mc_image":
+        distractors = pick_distractors(word, all_words, rng)
+        q["prompt"] = "Observa la escena"
+        opts = [word["word_en"]] + [d["word_en"] for d in distractors]
     elif qtype == "mc_phrase":
         distractors = pick_distractors(word, all_words, rng, need_example=True)
         if resolved == "en_to_es":
@@ -137,4 +144,10 @@ def build_question(word: dict, qtype: str, direction: str, all_words: list, rng=
 
     rng.shuffle(opts)
     q["options"] = opts
+    return _attach_image(q, word)
+
+
+def _attach_image(q: dict, word: dict) -> dict:
+    if word.get("image_status", "none") == "approved" and word.get("image"):
+        q["image_url"] = f"/{word['image']}"
     return q
