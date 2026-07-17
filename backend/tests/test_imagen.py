@@ -52,8 +52,9 @@ def fake_gemini(monkeypatch):
 @pytest.fixture
 def word_id(client, mock_apis, monkeypatch):
     import backend.main as main
-    # el alta no debe disparar generación en tests: sin key
+    # el alta no debe disparar generación en tests: sin keys
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
     return client.post("/api/words", json={"word": "strong"}).json()["id"]
 
 
@@ -74,6 +75,7 @@ def test_generate_image_404(client, fake_gemini):
 
 def test_generate_image_503_sin_key(client, word_id, monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
     r = client.post(f"/api/words/{word_id}/image")
     assert r.status_code == 503
     assert "GEMINI_API_KEY" in r.json()["detail"]
@@ -127,6 +129,7 @@ def test_background_task_setea_pending(client, word_id, fake_gemini):
 
 def test_add_word_sin_key_no_genera(client, mock_apis, monkeypatch, fake_gemini):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
     r = client.post("/api/words", json={"word": "quiet"})
     assert r.status_code == 200
     assert fake_gemini == []          # no se llamó a Gemini
@@ -146,3 +149,55 @@ def test_delete_word_borra_su_imagen(client, word_id, fake_gemini):
     assert (main.IMAGES_DIR / f"{word_id}.png").exists()
     assert client.delete(f"/api/words/{word_id}").status_code == 200
     assert not (main.IMAGES_DIR / f"{word_id}.png").exists()
+
+
+# ── selección de proveedor (Qwen/DashScope prioridad, Gemini fallback) ──
+
+def test_api_key_prioriza_dashscope(monkeypatch):
+    from backend import imagen
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "qwen-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "gem-key")
+    assert imagen.api_key() == "qwen-key"
+    monkeypatch.delenv("DASHSCOPE_API_KEY")
+    assert imagen.api_key() == "gem-key"
+    monkeypatch.delenv("GEMINI_API_KEY")
+    assert imagen.api_key() == ""
+
+
+def test_generate_scene_despacha_por_proveedor(monkeypatch):
+    from backend import imagen
+
+    async def fake_qwen(word):
+        return b"qwen-png"
+
+    async def fake_gemini(word):
+        return b"gemini-png"
+
+    monkeypatch.setattr(imagen, "_generate_qwen", fake_qwen)
+    monkeypatch.setattr(imagen, "_generate_gemini", fake_gemini)
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "k")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    assert asyncio.run(imagen.generate_scene({})) == b"qwen-png"
+    monkeypatch.delenv("DASHSCOPE_API_KEY")
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    assert asyncio.run(imagen.generate_scene({})) == b"gemini-png"
+
+
+def test_generate_scene_fallback_a_gemini_si_qwen_falla(monkeypatch):
+    from backend import imagen
+
+    async def qwen_roto(word):
+        raise RuntimeError("Qwen HTTP 401")
+
+    async def fake_gemini(word):
+        return b"gemini-png"
+
+    monkeypatch.setattr(imagen, "_generate_qwen", qwen_roto)
+    monkeypatch.setattr(imagen, "_generate_gemini", fake_gemini)
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "k1")
+    monkeypatch.setenv("GEMINI_API_KEY", "k2")
+    assert asyncio.run(imagen.generate_scene({})) == b"gemini-png"
+    # sin Gemini: el error de Qwen se propaga
+    monkeypatch.delenv("GEMINI_API_KEY")
+    with pytest.raises(RuntimeError, match="Qwen"):
+        asyncio.run(imagen.generate_scene({}))

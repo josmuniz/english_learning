@@ -416,7 +416,7 @@ async def _generate_image_task(word_id: str):
 @app.post("/api/words/{word_id}/image")
 async def generate_word_image(word_id: str):
     if not imagen.api_key():
-        raise HTTPException(503, "Generación de imágenes no configurada (GEMINI_API_KEY)")
+        raise HTTPException(503, "Generación de imágenes no configurada (DASHSCOPE_API_KEY o GEMINI_API_KEY)")
     words = load_words()
     target = next((w for w in words if w["id"] == word_id), None)
     if target is None:
