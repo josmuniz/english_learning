@@ -352,7 +352,7 @@ async def delete_word(word_id: str):
 async def update_word(word_id: str, req: WordUpdateRequest):
     updates = {k: v.strip() for k, v in req.model_dump(exclude_none=True).items()}
     for field in ("example_en", "example_es"):
-        if field in updates and len(updates[field].split()) > 10:
+        if field in updates and len(updates[field].split()) > MAX_EXAMPLE_WORDS:
             raise HTTPException(422, "El ejemplo no puede superar 10 palabras")
 
     words = load_words()
