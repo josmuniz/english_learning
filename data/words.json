@@ -14,9 +14,9 @@
     "definition_en": "Someone who is beautiful. Can be used as a term of address.",
     "definition_es": "Alguien que es guapa. Se puede utilizar como un término de dirección.",
     "example_en": "Hey, beautiful!",
-    "example_es": "¡Hola, hermosa! ",
-    "times_practiced": 3,
-    "times_correct": 2
+    "example_es": "¡Hola, hermosa!",
+    "times_practiced": 11,
+    "times_correct": 6
   },
   {
     "id": "dabf478f-4056-4395-9fe3-28e30f2669ab",
@@ -34,8 +34,8 @@
     "definition_es": "Un evento feliz, cosa, persona, etc.",
     "example_en": "Music makes me feel happy.",
     "example_es": "La música me hace sentir feliz.",
-    "times_practiced": 5,
-    "times_correct": 4
+    "times_practiced": 7,
+    "times_correct": 6
   },
   {
     "id": "f16bcad1-082a-45b2-bf7a-4133d0ca853b",
@@ -53,8 +53,8 @@
     "definition_es": "Capaz de producir una gran fuerza física.",
     "example_en": "a big strong man; Jake was tall and strong",
     "example_es": "un hombre grande y fuerte; Jake era alto y fuerte",
-    "times_practiced": 9,
-    "times_correct": 7
+    "times_practiced": 11,
+    "times_correct": 9
   },
   {
     "id": "6c18b583-ef8f-43a3-8222-f5c9ef8ef9c7",
@@ -72,8 +72,8 @@
     "definition_es": "Un acto de pensar; consideración (de algo).",
     "example_en": "I'll have a think about that and let you know.",
     "example_es": "Lo pensaré y te lo haré saber.",
-    "times_practiced": 7,
-    "times_correct": 5
+    "times_practiced": 8,
+    "times_correct": 6
   },
   {
     "id": "ce5022be-c0e3-4816-8f45-6835e0960735",
@@ -82,7 +82,7 @@
     "word_es": "¡hasta luego",
     "type": "phrase",
     "ipa": "",
-    "pronunciation_es": "",
+    "pronunciation_es": "si yu leiter",
     "synonym_en": "",
     "synonym_es": "",
     "antonym_en": "",
@@ -91,8 +91,8 @@
     "definition_es": "",
     "example_en": "",
     "example_es": "",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 1,
+    "times_correct": 1
   },
   {
     "id": "5feb0b0f-a12d-47f7-9666-b00cdd0fba1c",
@@ -110,8 +110,8 @@
     "definition_es": "Cualquier dispositivo utilizado para la vigilancia encubierta.",
     "example_en": "Catching those thieves will be hard: they're so sneaky!",
     "example_es": "Atrapar a esos ladrones será difícil: ¡son tan astutos!",
-    "times_practiced": 2,
-    "times_correct": 2
+    "times_practiced": 7,
+    "times_correct": 7
   },
   {
     "id": "0de1cc42-d888-4c7b-b052-ad8a2f073d6f",
@@ -129,8 +129,8 @@
     "definition_es": "Ansioso o particular por los detalles insignificantes.",
     "example_en": "It was a very fussy experience.",
     "example_es": "Fue una experiencia muy exigente.",
-    "times_practiced": 2,
-    "times_correct": 0
+    "times_practiced": 6,
+    "times_correct": 3
   },
   {
     "id": "f40c7839-7df1-4b8f-a0e4-b55c39b48e4b",
@@ -148,27 +148,8 @@
     "definition_es": "Algo desagradable.",
     "example_en": "Processed foods are full of aspartame and other nasties.",
     "example_es": "Los alimentos procesados están llenos de aspartamo y otras sustancias desagradables.",
-    "times_practiced": 0,
-    "times_correct": 0
-  },
-  {
-    "id": "c0c0d853-95a1-49fa-85d2-e91ed07621ad",
-    "created_at": "2026-07-14T18:02:26.864331",
-    "word_en": "callous",
-    "word_es": "calloso",
-    "type": "adjective",
-    "ipa": "/ˈkæləs/",
-    "pronunciation_es": "kales",
-    "synonym_en": "indurate",
-    "synonym_es": "indurato",
-    "antonym_en": "",
-    "antonym_es": "",
-    "definition_en": "Emotionally hardened; unfeeling and indifferent to the suffering/feelings of others.",
-    "definition_es": "Emocionalmente endurecido; insensible e indiferente al sufrimiento/sentimientos de los demás.",
-    "example_en": "She was so callous that she could criticise a cancer patient for wearing a wig.",
-    "example_es": "Era tan insensible que podía criticar a un paciente con cáncer por usar una peluca.",
     "times_practiced": 1,
-    "times_correct": 0
+    "times_correct": 1
   },
   {
     "id": "3458c8a3-bb21-4272-931b-71125f0e12ae",
@@ -243,8 +224,8 @@
     "definition_es": "",
     "example_en": "",
     "example_es": "",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 1,
+    "times_correct": 1
   },
   {
     "id": "1922f7e0-e543-4bc4-82f7-d57bbf1b5229",
@@ -319,8 +300,8 @@
     "definition_es": "Cualquiera de varias especies de grandes mamíferos marinos del infraorden Cetacea.",
     "example_en": "The whale was remarkable.",
     "example_es": "La ballena era notable.",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 1,
+    "times_correct": 1
   },
   {
     "id": "43959ff9-0e9e-46b0-ba6f-75e3a505c329",
@@ -338,8 +319,8 @@
     "definition_es": "Un punto en el que convergen los rayos de luz reflejados o refractados.",
     "example_en": "The heat of sunlight at the focus of a magnifying glass can easily set dry leaves on fire.",
     "example_es": "El calor de la luz solar en el foco de una lupa puede incendiar fácilmente las hojas secas.",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 2,
+    "times_correct": 2
   },
   {
     "id": "68907a50-573b-49c1-8f18-9c0043a41568",
@@ -357,7 +338,26 @@
     "definition_es": "Dolorosamente.",
     "example_en": "As he was a politician, he discussed all subjects carefully, not offending anyone.  He carefully studied the papers, while planning his next move.  He carefully avoided the subject all evening.",
     "example_es": "Como era un político, discutió todos los temas cuidadosamente, sin ofender a nadie.  Estudió cuidadosamente los papeles, mientras planeaba su próximo movimiento.  Evitó cuidadosamente el tema toda la noche.",
-    "times_practiced": 0,
-    "times_correct": 0
+    "times_practiced": 1,
+    "times_correct": 1
+  },
+  {
+    "id": "2f5d88d0-e621-46a6-b321-4793a6ec6618",
+    "created_at": "2026-07-15T20:53:42.469051",
+    "word_en": "i walk alone at night",
+    "word_es": "camino solo por la noche",
+    "type": "phrase",
+    "ipa": "",
+    "pronunciation_es": "",
+    "synonym_en": "",
+    "synonym_es": "",
+    "antonym_en": "",
+    "antonym_es": "",
+    "definition_en": "",
+    "definition_es": "",
+    "example_en": "",
+    "example_es": "",
+    "times_practiced": 1,
+    "times_correct": 1
   }
 ]
