@@ -507,22 +507,30 @@ async function generateMissing() {
   if (missing.length === 0) { toast('Todas las palabras tienen escena', 'info'); return; }
   btn.dataset.running = '1';
   genMissingStop = false;
+  let generated = 0, aborted = false;
   for (let i = 0; i < missing.length; i++) {
-    if (genMissingStop) break;
+    if (genMissingStop) { aborted = true; break; }
     btn.textContent = `⏸ ${i + 1}/${missing.length} (click para parar)`;
     try {
       const res = await fetch(`${API}/api/words/${missing[i].id}/image`, { method: 'POST' });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))).detail || 'error';
         toast(`${missing[i].word_en}: ${err}`, 'error');
-        if (res.status === 503) break;       // sin key: no insistir
+        if (res.status === 503) { aborted = true; break; }   // sin key: no insistir
+      } else {
+        generated++;
       }
-    } catch { toast('Sin conexión', 'error'); break; }
+    } catch { toast('Sin conexión con el servidor', 'error'); aborted = true; break; }
   }
   btn.dataset.running = '';
   btn.textContent = '🎨 Generar faltantes';
   await loadWords();
-  toast('Generación terminada — revisa y aprueba las escenas', 'success');
+  if (generated === 0) {
+    if (!aborted) toast('No se generó ninguna escena', 'error');
+  } else {
+    toast(`${aborted ? 'Generación detenida' : 'Generación terminada'}: ${generated} escena${generated !== 1 ? 's' : ''} — revisa y aprueba`,
+          aborted ? 'info' : 'success');
+  }
 }
 
 // ── Load words ─────────────────────────────────────────────────────
@@ -636,7 +644,7 @@ async function generateImage(id) {
     renderWords();
     toast('Escena lista — revísala y apruébala', 'success');
   } catch (e) {
-    toast(e.message, 'error');
+    toast(e instanceof TypeError ? 'Sin conexión con el servidor' : e.message, 'error');
   }
 }
 
@@ -654,7 +662,7 @@ async function setImageStatus(id, status) {
     renderWords();
     toast(status === 'approved' ? 'Escena aprobada ✓' : 'Escena descartada', 'success');
   } catch (e) {
-    toast(e.message, 'error');
+    toast(e instanceof TypeError ? 'Sin conexión con el servidor' : e.message, 'error');
   }
 }
 
