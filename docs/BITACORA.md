@@ -255,3 +255,44 @@ Se creó `docs/SOLUCION.md` (nuevo) consolidando: diseño (visión, componentes,
 - Rama `main`, con `feature/alta-bilingue` ya mergeada (commit `ecfd236`).
 - Cambio sin commitear al abrir la sesión: `data/words.json` (+228 líneas) — vocabulario agregado por uso real de la app (incluye "ballena"/"tiburón" de la verificación del Paso 4).
 - Pendientes heredados del Paso 4: validación interactiva del diálogo "+ Agregar" → Español, y follow-up `esc()` en `renderWords()`.
+
+---
+
+## Paso 6 · Grilla editable + ejemplos cortos (2026-07-17)
+
+**Meta:** Vista de grilla tipo planilla con edición inline (pronunciación, sinónimos, antónimos, ejemplos) y ejemplos ≤10 palabras al generar.
+
+### 6.1 Qué se hizo
+
+- `PATCH /api/words/{id}` con lista blanca Pydantic de 8 campos editables (`pronunciation_es`, `ipa`, sinónimo/antónimo/ejemplo EN+ES); ejemplos >10 palabras → 422 `"El ejemplo no puede superar 10 palabras"`; campos protegidos (stats, word_en/es, type) se ignoran por diseño.
+- `pick_example()`: el pipeline de diccionario prefiere el primer ejemplo con ≤10 palabras; si ninguno cumple, recorta a 10 + "…".
+- Frontend: tabla `Inglés|Sonido|Español|Sinónimo|Antónimo|Ejemplo|acciones` reemplaza las tarjetas; edición inline por fila (una a la vez); frases solo editan sonido/IPA (celdas restantes en "—"); errores del PATCH se muestran en la fila sin perder lo tecleado; `esc()` aplicado a toda interpolación (cierra el follow-up XSS de fase 1) y `speakById()` elimina la interpolación de texto en `onclick`.
+- Ejecutado con subagent-driven development: 3 tasks implementadas con TDD (RED→GREEN), review por task, review final de rama (opus) + security review: **PASS**, ready to merge.
+
+### 6.2 Demo
+
+**URL:** http://localhost:8003
+**Acciones de browser:**
+1. Abrir la app → la sección de palabras muestra la grilla con 7 columnas
+2. Click ✏️ en una frase sin pronunciación → solo 2 inputs (sonido, IPA)
+3. Escribir la pronunciación → 💾 → fila actualizada + toast "Cambios guardados"
+4. Recargar → persiste
+
+**Comando terminal:**
+```bash
+curl -s -X PATCH http://localhost:8003/api/words/<id> \
+  -H 'Content-Type: application/json' -d '{"pronunciation_es": "si yu leiter"}'
+```
+
+### 6.3 Archivos
+
+- **Nuevos:** `backend/tests/test_edit.py`
+- **Modificados:** `backend/main.py`, `backend/tests/test_words.py`, `frontend/index.html`
+
+### 6.4 Tests
+
+`python3 -m pytest backend/tests/ -q` → **60 passed** (47 previos + 9 PATCH + 4 pick_example; el plan estimaba 61 por un error aritmético). Verificación browser (Playwright): 7/7 checks OK, sin errores de consola; verificado además que la tabla scrollea dentro de su contenedor a 390px (el overflow lateral de la barra de tabs es pre-existente, anotado como follow-up).
+
+### 6.5 Próximo paso
+
+Validación interactiva del diálogo "+ Agregar" → Español (pendiente heredado). Follow-ups cosméticos anotados: CSS muerto `.word-card`/`.highlight`, label a11y del th de acciones, overflow móvil de tabs.
