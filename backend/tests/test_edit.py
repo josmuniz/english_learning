@@ -105,3 +105,43 @@ def test_patch_example_exactly_10_words_ok(client, word_id, field):
     r = client.patch(f"/api/words/{word_id}", json={field: ten})
     assert r.status_code == 200
     assert r.json()[field] == ten
+
+# ── word_es editable (traducción) ────────────────────────────────────
+
+def test_patch_updates_word_es(client, word_id):
+    r = client.patch(f"/api/words/{word_id}", json={"word_es": "fortísimo"})
+    assert r.status_code == 200
+    assert r.json()["word_es"] == "fortísimo"
+    stored = next(w for w in client.get("/api/words").json() if w["id"] == word_id)
+    assert stored["word_es"] == "fortísimo"
+
+
+def test_patch_word_es_on_phrase(client, phrase_id):
+    r = client.patch(f"/api/words/{phrase_id}", json={"word_es": "romper el hielo"})
+    assert r.status_code == 200
+    assert r.json()["word_es"] == "romper el hielo"
+
+
+def test_patch_word_es_empty_422(client, word_id):
+    r = client.patch(f"/api/words/{word_id}", json={"word_es": "   "})
+    assert r.status_code == 422
+    assert r.json()["detail"] == "La traducción no puede estar vacía"
+
+
+def test_patch_word_es_duplicate_409(client, mock_apis, word_id):
+    client.post("/api/words", json={"word": "weak"})   # crea entrada con word_es = tr(weak)
+    r = client.patch(f"/api/words/{word_id}", json={"word_es": "tr(weak)"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "Esa traducción ya existe en tu vocabulario"
+
+
+def test_patch_word_es_same_entry_ok(client, word_id):
+    # re-guardar la traducción propia no cuenta como duplicado
+    current = next(w for w in client.get("/api/words").json() if w["id"] == word_id)
+    r = client.patch(f"/api/words/{word_id}", json={"word_es": current["word_es"]})
+    assert r.status_code == 200
+
+
+def test_patch_unknown_id_404_wins_over_validation(client):
+    r = client.patch("/api/words/no-existe", json={"word_es": "   "})
+    assert r.status_code == 404

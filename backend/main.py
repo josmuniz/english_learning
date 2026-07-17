@@ -68,6 +68,7 @@ class WordRequest(BaseModel):
     lang: str = "en"   # "en" | "es"
 
 class WordUpdateRequest(BaseModel):
+    word_es: str | None = None
     pronunciation_es: str | None = None
     ipa: str | None = None
     synonym_en: str | None = None
@@ -351,17 +352,25 @@ async def delete_word(word_id: str):
 @app.patch("/api/words/{word_id}")
 async def update_word(word_id: str, req: WordUpdateRequest):
     updates = {k: v.strip() for k, v in req.model_dump(exclude_none=True).items()}
+
+    words = load_words()
+    target = next((w for w in words if w["id"] == word_id), None)
+    if target is None:
+        raise HTTPException(404, "Palabra no encontrada")
+
     for field in ("example_en", "example_es"):
         if field in updates and len(updates[field].split()) > MAX_EXAMPLE_WORDS:
             raise HTTPException(422, "El ejemplo no puede superar 10 palabras")
+    if "word_es" in updates:
+        if not updates["word_es"]:
+            raise HTTPException(422, "La traducción no puede estar vacía")
+        dup = updates["word_es"].lower()
+        if any(w["id"] != word_id and dup == w.get("word_es", "").lower() for w in words):
+            raise HTTPException(409, "Esa traducción ya existe en tu vocabulario")
 
-    words = load_words()
-    for w in words:
-        if w["id"] == word_id:
-            w.update(updates)
-            save_words(words)
-            return w
-    raise HTTPException(404, "Palabra no encontrada")
+    target.update(updates)
+    save_words(words)
+    return target
 
 
 @app.post("/api/validate")

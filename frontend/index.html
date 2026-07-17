@@ -574,7 +574,7 @@ function renderEditRow(w) {
     <td style="font-weight:600; color:var(--accent);">${esc(w.word_en)}</td>
     <td>${editInput('pronunciation_es', w.pronunciation_es, 'sonido')}
         ${editInput('ipa', w.ipa, 'IPA')}</td>
-    <td>${esc(w.word_es || '')}</td>
+    <td>${editInput('word_es', w.word_es, 'traducción')}</td>
     ${isPhrase
       ? `<td colspan="3" style="color:var(--faint); font-size:12px;">— no aplica a frases —</td>`
       : `<td>${editInput('synonym_en', w.synonym_en, 'EN')}
@@ -601,9 +601,9 @@ function cancelEdit() {
   renderWords();
 }
 
-const EDIT_FIELDS_WORD = ['pronunciation_es', 'ipa', 'synonym_en', 'synonym_es',
+const EDIT_FIELDS_PHRASE = ['word_es', 'pronunciation_es', 'ipa'];
+const EDIT_FIELDS_WORD = [...EDIT_FIELDS_PHRASE, 'synonym_en', 'synonym_es',
                           'antonym_en', 'antonym_es', 'example_en', 'example_es'];
-const EDIT_FIELDS_PHRASE = ['pronunciation_es', 'ipa'];
 
 async function saveEdit(id) {
   const w = allWords.find(x => x.id === id);
@@ -611,11 +611,20 @@ async function saveEdit(id) {
   const isPhrase = (w.type || 'word') === 'phrase';
   const fields = isPhrase ? EDIT_FIELDS_PHRASE : EDIT_FIELDS_WORD;
 
+  // Enviar solo los campos que cambiaron: un valor legacy inválido (ejemplo largo,
+  // traducción vacía) no bloquea la edición de los demás campos.
   const body = {};
   for (const f of fields) {
     const el = document.getElementById(`edit-${f}`);
-    if (el) body[f] = el.value.trim();
+    if (!el) continue;
+    const val = el.value.trim();
+    if (val !== String(w[f] ?? '').trim()) body[f] = val;
   }
+  if (body.word_es === '') {
+    document.getElementById('edit-error').textContent = 'La traducción no puede estar vacía';
+    return;
+  }
+  if (Object.keys(body).length === 0) { cancelEdit(); return; }
 
   try {
     const res = await fetch(`${API}/api/words/${id}`, {

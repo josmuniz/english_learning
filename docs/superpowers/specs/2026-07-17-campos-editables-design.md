@@ -16,10 +16,11 @@ quiere cortos (≤10 palabras).
 1. **Vista de grilla** (tipo planilla Excel) que reemplaza la lista de tarjetas: una fila por
    entrada, columnas hacia la derecha para aprovechar la pantalla.
 2. **Edición inline por fila** de campos de cualquier entrada (palabra o frase).
-3. Campos editables: `pronunciation_es`, `ipa`, `synonym_en`, `synonym_es`, `antonym_en`,
-   `antonym_es`, `example_en`, `example_es`. En **frases** solo `pronunciation_es` e `ipa`
-   (sinónimo/antónimo/ejemplo no aplican a frases y no se muestran ni se editan).
-4. Campos NO editables (protegidos): `id`, `created_at`, `word_en`, `word_es`, `type`,
+3. Campos editables: `word_es` (traducción; no puede quedar vacía → 422), `pronunciation_es`,
+   `ipa`, `synonym_en`, `synonym_es`, `antonym_en`, `antonym_es`, `example_en`, `example_es`.
+   En **frases** solo `word_es`, `pronunciation_es` e `ipa` (sinónimo/antónimo/ejemplo no
+   aplican a frases y no se muestran ni se editan).
+4. Campos NO editables (protegidos): `id`, `created_at`, `word_en`, `type`,
    `definition_en`, `definition_es`, `times_practiced`, `times_correct`.
 5. **Ejemplos cortos al generar:** el pipeline elige ejemplos de ≤10 palabras.
 6. Sin cambios en el quiz ni en el notifier (leen los mismos campos de `words.json`).
