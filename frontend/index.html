@@ -164,13 +164,15 @@
 
     /* Pronunciation text */
     .pronunciation { font-size: 13px; color: var(--muted); font-style: italic; }
+    .page-width { width: 80%; margin: 0 auto; }
+    @media (max-width: 900px) { .page-width { width: 100%; } }
   </style>
 </head>
 <body>
 
 <!-- ═══════════════════════ HEADER ════════════════════════════════ -->
 <header style="background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50;">
-  <div style="max-width:1100px; margin:0 auto; padding:0 24px; height:60px; display:flex; align-items:center; justify-content:space-between;">
+  <div class="page-width" style="padding:0 24px; height:60px; display:flex; align-items:center; justify-content:space-between;">
     <!-- Logo -->
     <div style="display:flex; align-items:center; gap:10px;">
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
@@ -197,7 +199,7 @@
 </header>
 
 <!-- ═══════════════════════ MAIN ══════════════════════════════════ -->
-<main style="max-width:1100px; margin:0 auto; padding:32px 24px;">
+<main class="page-width" style="padding:32px 24px;">
 
   <!-- ─────────── TAB: VOCABULARIO ──────────────────────────────── -->
   <div id="view-vocab">
