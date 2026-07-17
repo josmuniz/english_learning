@@ -67,6 +67,16 @@ class WordRequest(BaseModel):
     word: str
     lang: str = "en"   # "en" | "es"
 
+class WordUpdateRequest(BaseModel):
+    pronunciation_es: str | None = None
+    ipa: str | None = None
+    synonym_en: str | None = None
+    synonym_es: str | None = None
+    antonym_en: str | None = None
+    antonym_es: str | None = None
+    example_en: str | None = None
+    example_es: str | None = None
+
 class ValidateRequest(BaseModel):
     word_en: str
     sentence: str
@@ -79,6 +89,19 @@ class QuizAnswerRequest(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+MAX_EXAMPLE_WORDS = 10
+
+def pick_example(candidates: list[str]) -> str:
+    """Primer ejemplo con ≤10 palabras; si ninguno cumple, recorta el primero."""
+    candidates = [c.strip() for c in candidates if c and c.strip()]
+    if not candidates:
+        return ""
+    for c in candidates:
+        if len(c.split()) <= MAX_EXAMPLE_WORDS:
+            return c
+    return " ".join(candidates[0].split()[:MAX_EXAMPLE_WORDS]) + "…"
+
 
 async def fetch_dictionary(word: str, client: httpx.AsyncClient) -> dict:
     r = await client.get(f"{DICT_API}/{word}", timeout=10)
@@ -96,16 +119,15 @@ async def fetch_dictionary(word: str, client: httpx.AsyncClient) -> dict:
     meaning = next((m for m in all_meanings if m.get("definitions")), all_meanings[0] if all_meanings else {})
     defn = meaning.get("definitions", [{}])[0]
 
-    # Find an example sentence
-    example_en = defn.get("example", "")
-    if not example_en:
-        for m in all_meanings:
-            for d in m.get("definitions", []):
-                if d.get("example"):
-                    example_en = d["example"]
-                    break
-            if example_en:
-                break
+    # Find an example sentence — prefer the first one with ≤10 words
+    candidates = []
+    if defn.get("example"):
+        candidates.append(defn["example"])
+    for m in all_meanings:
+        for d in m.get("definitions", []):
+            if d.get("example"):
+                candidates.append(d["example"])
+    example_en = pick_example(candidates)
     # Fallback example using the word itself
     if not example_en:
         part = meaning.get("partOfSpeech", "word")
@@ -324,6 +346,22 @@ async def delete_word(word_id: str):
         raise HTTPException(404, "Palabra no encontrada")
     save_words(new)
     return {"ok": True}
+
+
+@app.patch("/api/words/{word_id}")
+async def update_word(word_id: str, req: WordUpdateRequest):
+    updates = {k: v.strip() for k, v in req.model_dump(exclude_none=True).items()}
+    for field in ("example_en", "example_es"):
+        if field in updates and len(updates[field].split()) > MAX_EXAMPLE_WORDS:
+            raise HTTPException(422, "El ejemplo no puede superar 10 palabras")
+
+    words = load_words()
+    for w in words:
+        if w["id"] == word_id:
+            w.update(updates)
+            save_words(words)
+            return w
+    raise HTTPException(404, "Palabra no encontrada")
 
 
 @app.post("/api/validate")

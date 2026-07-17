@@ -132,3 +132,29 @@ def test_lang_invalid_422_and_default_en(client, mock_apis):
     r = client.post("/api/words", json={"word": "strong"})   # sin lang → EN
     assert r.status_code == 200
     assert mock_apis["dictionary"] == 1
+
+
+# ── ejemplos cortos (≤10 palabras) ───────────────────────────────────
+
+def test_pick_example_prefers_first_short():
+    from backend.main import pick_example
+    assert pick_example(["Too long " * 6, "He is strong."]) == "He is strong."
+
+
+def test_pick_example_keeps_order_among_short():
+    from backend.main import pick_example
+    assert pick_example(["First short one.", "Second short one."]) == "First short one."
+
+
+def test_pick_example_truncates_when_all_long():
+    from backend.main import pick_example
+    long1 = "one two three four five six seven eight nine ten eleven twelve"
+    out = pick_example([long1])
+    assert out == "one two three four five six seven eight nine ten…"
+    assert len(out.rstrip("…").split()) == 10
+
+
+def test_pick_example_empty():
+    from backend.main import pick_example
+    assert pick_example([]) == ""
+    assert pick_example(["", "   "]) == ""
