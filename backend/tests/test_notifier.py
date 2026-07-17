@@ -185,3 +185,16 @@ def test_main_404_sin_habilitadas_logs_skip(sandbox, monkeypatch):
     log_text = (sandbox / "log").read_text(encoding="utf-8")
     assert "sin palabras habilitadas" in log_text
     assert "backend no disponible" not in log_text
+
+
+def test_build_result_dialog_muestra_sonido_es_to_en():
+    res = {"correct": True, "correct_answer": "sneaky",
+           "word": {"pronunciation_es": "sniki"}}
+    out = nd.build_result_dialog(res, direction="es_to_en")
+    assert "sniki" in out
+    # en_to_es: la respuesta es español, no corresponde pronunciación
+    out2 = nd.build_result_dialog(res, direction="en_to_es")
+    assert "sniki" not in out2
+    # sin pronunciación: no agrega nada raro
+    res3 = {"correct": False, "correct_answer": "sneaky", "word": {}}
+    assert "()" not in nd.build_result_dialog(res3, direction="es_to_en")

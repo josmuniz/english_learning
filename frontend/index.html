@@ -1053,9 +1053,12 @@ function renderQuestion(q, container, onDone) {
       return;
     }
     const fb = container.querySelector('#q-feedback');
+    // Sonido de la respuesta: solo cuando la respuesta correcta es el inglés
+    const fbPron = (q.direction === 'es_to_en' && data.word && data.word.pronunciation_es)
+      ? ` <span class="pronunciation">(${esc(data.word.pronunciation_es)})</span>` : '';
     fb.innerHTML = data.correct
-      ? `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:10px 14px;">✅ <strong style="color:var(--green);">¡Correcto!</strong> <span style="font-size:12px;color:var(--muted);">${esc(data.correct_answer)}</span></div>`
-      : `<div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:8px;padding:10px 14px;">❌ <strong style="color:var(--red);">Incorrecto.</strong> <span style="font-size:12px;color:var(--muted);">Era: <strong style="color:var(--text);">${esc(data.correct_answer)}</strong></span></div>`;
+      ? `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:10px 14px;">✅ <strong style="color:var(--green);">¡Correcto!</strong> <span style="font-size:12px;color:var(--muted);">${esc(data.correct_answer)}</span>${fbPron}</div>`
+      : `<div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:8px;padding:10px 14px;">❌ <strong style="color:var(--red);">Incorrecto.</strong> <span style="font-size:12px;color:var(--muted);">Era: <strong style="color:var(--text);">${esc(data.correct_answer)}</strong></span>${fbPron}</div>`;
     if (btnEl) btnEl.style.borderColor = data.correct ? 'var(--green)' : 'var(--red)';
     onDone(data);
   };

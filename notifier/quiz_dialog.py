@@ -55,11 +55,14 @@ def build_question_dialog(q) -> str:
             f'with title "{TITLE}"')
 
 
-def build_result_dialog(res) -> str:
+def build_result_dialog(res, direction="es_to_en") -> str:
+    # Sonido de la respuesta: solo cuando la respuesta correcta es el inglés
+    pron = (res.get("word") or {}).get("pronunciation_es", "")
+    extra = f"\n🔊 ({pron})" if pron and direction == "es_to_en" else ""
     if res["correct"]:
-        text = f"✅ ¡Correcto!\n\n{res['correct_answer']}"
+        text = f"✅ ¡Correcto!\n\n{res['correct_answer']}{extra}"
     else:
-        text = f"❌ Incorrecto.\n\nEra: {res['correct_answer']}"
+        text = f"❌ Incorrecto.\n\nEra: {res['correct_answer']}{extra}"
     return (f'display dialog "{applescript_escape(text)}" '
             f'buttons {{"+ Agregar", "OK"}} default button "OK" '
             f'with title "{TITLE}" giving up after 60')
@@ -198,7 +201,8 @@ def main() -> int:
             return 0
         log("ok" if res["correct"] else "wrong", f"{q['prompt']} -> {answer}")
 
-        result = parse_dialog_output(run_osascript(build_result_dialog(res)))
+        result = parse_dialog_output(run_osascript(
+            build_result_dialog(res, direction=q.get("direction", "es_to_en"))))
         if result.get("button") == "+ Agregar":
             offer_add_word()
         return 0
