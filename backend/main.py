@@ -67,6 +67,16 @@ class WordRequest(BaseModel):
     word: str
     lang: str = "en"   # "en" | "es"
 
+class WordUpdateRequest(BaseModel):
+    pronunciation_es: str | None = None
+    ipa: str | None = None
+    synonym_en: str | None = None
+    synonym_es: str | None = None
+    antonym_en: str | None = None
+    antonym_es: str | None = None
+    example_en: str | None = None
+    example_es: str | None = None
+
 class ValidateRequest(BaseModel):
     word_en: str
     sentence: str
@@ -324,6 +334,22 @@ async def delete_word(word_id: str):
         raise HTTPException(404, "Palabra no encontrada")
     save_words(new)
     return {"ok": True}
+
+
+@app.patch("/api/words/{word_id}")
+async def update_word(word_id: str, req: WordUpdateRequest):
+    updates = {k: v.strip() for k, v in req.model_dump(exclude_none=True).items()}
+    for field in ("example_en", "example_es"):
+        if field in updates and len(updates[field].split()) > 10:
+            raise HTTPException(422, "El ejemplo no puede superar 10 palabras")
+
+    words = load_words()
+    for w in words:
+        if w["id"] == word_id:
+            w.update(updates)
+            save_words(words)
+            return w
+    raise HTTPException(404, "Palabra no encontrada")
 
 
 @app.post("/api/validate")
