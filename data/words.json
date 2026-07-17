@@ -93,8 +93,8 @@
     "example_es": "Atrapar a esos ladrones será difícil: ¡son tan astutos!",
     "times_practiced": 8,
     "times_correct": 8,
-    "image": "",
-    "image_status": "none"
+    "image": "images/5feb0b0f-a12d-47f7-9666-b00cdd0fba1c.png",
+    "image_status": "pending"
   },
   {
     "id": "0de1cc42-d888-4c7b-b052-ad8a2f073d6f",
@@ -112,7 +112,7 @@
     "definition_es": "Ansioso o particular por los detalles insignificantes.",
     "example_en": "It was a very fussy experience.",
     "example_es": "Fue una experiencia muy exigente.",
-    "times_practiced": 6,
+    "times_practiced": 7,
     "times_correct": 3
   },
   {
@@ -722,7 +722,7 @@
     "definition_es": "",
     "example_en": "",
     "example_es": "",
-    "times_practiced": 0,
+    "times_practiced": 1,
     "times_correct": 0
   },
   {
