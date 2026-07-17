@@ -31,7 +31,11 @@ mkdir -p "$AGENTS_DIR" "$HOME/Library/Logs"
 # (launchd no lee ~/.zshrc). El plist vive fuera del repo; la key no toca git.
 GEMINI_KEY_XML=""
 if [ -n "${GEMINI_API_KEY:-}" ]; then
-  GEMINI_KEY_XML="<key>EnvironmentVariables</key><dict><key>GEMINI_API_KEY</key><string>${GEMINI_API_KEY}</string></dict>"
+  # escapar XML por robustez (las keys reales son [A-Za-z0-9_-])
+  GEMINI_KEY_ESC="${GEMINI_API_KEY//&/&amp;}"
+  GEMINI_KEY_ESC="${GEMINI_KEY_ESC//</&lt;}"
+  GEMINI_KEY_ESC="${GEMINI_KEY_ESC//>/&gt;}"
+  GEMINI_KEY_XML="<key>EnvironmentVariables</key><dict><key>GEMINI_API_KEY</key><string>${GEMINI_KEY_ESC}</string></dict>"
 else
   echo "AVISO: GEMINI_API_KEY no está en el entorno; la generación de imágenes quedará deshabilitada en el backend de launchd." >&2
 fi

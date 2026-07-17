@@ -358,6 +358,7 @@ async def delete_word(word_id: str):
     if len(new) == len(words):
         raise HTTPException(404, "Palabra no encontrada")
     save_words(new)
+    (IMAGES_DIR / f"{word_id}.png").unlink(missing_ok=True)   # sin PNGs huérfanos
     return {"ok": True}
 
 
@@ -408,6 +409,8 @@ async def _generate_image_task(word_id: str):
             w["image_status"] = "pending"
             save_words(words)
             return
+    # la palabra fue borrada mientras se generaba: no dejar PNG huérfano
+    (IMAGES_DIR / f"{word_id}.png").unlink(missing_ok=True)
 
 
 @app.post("/api/words/{word_id}/image")

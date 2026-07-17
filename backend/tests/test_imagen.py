@@ -138,3 +138,11 @@ def test_build_prompt_no_pide_texto():
                              "example_en": "He was sneaky."})
     assert "sneaky" in p and "astuto" in p
     assert "no text" in p.lower()
+
+
+def test_delete_word_borra_su_imagen(client, word_id, fake_gemini):
+    import backend.main as main
+    client.post(f"/api/words/{word_id}/image")
+    assert (main.IMAGES_DIR / f"{word_id}.png").exists()
+    assert client.delete(f"/api/words/{word_id}").status_code == 200
+    assert not (main.IMAGES_DIR / f"{word_id}.png").exists()
