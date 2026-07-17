@@ -183,6 +183,7 @@
       </svg>
       <span style="font-size:17px; font-weight:700;">English Learning</span>
       <span id="word-count-badge" style="background:var(--tag-bg); color:var(--tag-txt); font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; display:none;"></span>
+      <button class="btn-ghost" id="gen-missing-btn" onclick="generateMissing()" style="padding:6px 12px; font-size:12px;">🎨 Generar faltantes</button>
     </div>
 
     <!-- Tabs (center) -->
@@ -261,6 +262,7 @@
             <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:13px;">
               <label><input type="checkbox" id="type-mc_word" checked onchange="toggleType('mc_word')"/> Palabra (opciones)</label>
               <label><input type="checkbox" id="type-mc_phrase" checked onchange="toggleType('mc_phrase')"/> Frase (opciones)</label>
+              <label><input type="checkbox" id="type-mc_image" checked onchange="toggleType('mc_image')"/> Escena (imagen)</label>
               <label><input type="checkbox" id="type-cloze" checked onchange="toggleType('cloze')"/> Completar hueco</label>
               <label><input type="checkbox" id="type-typing" checked onchange="toggleType('typing')"/> Escribir</label>
             </div>
@@ -391,6 +393,16 @@
   </div>
 </div>
 
+<!-- Lightbox de imagen -->
+<div id="image-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:60; align-items:center; justify-content:center;" onclick="if(event.target===this) closeImageModal()">
+  <div class="card" style="max-width:560px; width:92%; padding:20px; text-align:center;">
+    <p id="image-modal-word" style="font-size:18px; font-weight:700; color:var(--accent); margin-bottom:10px;"></p>
+    <img id="image-modal-img" src="" alt="escena" style="max-width:100%; max-height:60vh; border-radius:8px; margin-bottom:14px;">
+    <p id="image-modal-hint" style="font-size:12px; color:var(--muted); margin-bottom:12px;"></p>
+    <div id="image-modal-actions" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;"></div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toast"></div>
 
@@ -405,7 +417,7 @@ let timerTick = null;
 const CONFIG_KEY = 'elearn_config';
 const DEFAULT_CFG = {
   intervalMin: 15, direction: 'both',
-  types: ['mc_word', 'mc_phrase', 'cloze', 'typing'],
+  types: ['mc_word', 'mc_phrase', 'cloze', 'typing', 'mc_image'],
   perInterrupt: 1, addLang: 'en', timerActive: false, timerEndsAt: null,
 };
 let cfg = loadConfig();
@@ -444,7 +456,7 @@ function toggleType(t) {
 function applyConfigToUI() {
   setIntervalMin(cfg.intervalMin);
   setQuizMode(cfg.direction);
-  ['mc_word','mc_phrase','cloze','typing'].forEach(t => {
+  ['mc_word','mc_phrase','cloze','typing','mc_image'].forEach(t => {
     document.getElementById(`type-${t}`).checked = cfg.types.includes(t);
   });
   document.getElementById('per-interrupt').value = String(cfg.perInterrupt);
@@ -484,6 +496,33 @@ function toast(msg, type = 'info') {
   el.textContent = msg;
   document.getElementById('toast').appendChild(el);
   setTimeout(() => el.remove(), 4000);
+}
+
+let genMissingStop = false;
+
+async function generateMissing() {
+  const btn = document.getElementById('gen-missing-btn');
+  if (btn.dataset.running === '1') { genMissingStop = true; return; }
+  const missing = allWords.filter(w => !(w.image_status && w.image_status !== 'none'));
+  if (missing.length === 0) { toast('Todas las palabras tienen escena', 'info'); return; }
+  btn.dataset.running = '1';
+  genMissingStop = false;
+  for (let i = 0; i < missing.length; i++) {
+    if (genMissingStop) break;
+    btn.textContent = `⏸ ${i + 1}/${missing.length} (click para parar)`;
+    try {
+      const res = await fetch(`${API}/api/words/${missing[i].id}/image`, { method: 'POST' });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))).detail || 'error';
+        toast(`${missing[i].word_en}: ${err}`, 'error');
+        if (res.status === 503) break;       // sin key: no insistir
+      }
+    } catch { toast('Sin conexión', 'error'); break; }
+  }
+  btn.dataset.running = '';
+  btn.textContent = '🎨 Generar faltantes';
+  await loadWords();
+  toast('Generación terminada — revisa y aprueba las escenas', 'success');
 }
 
 // ── Load words ─────────────────────────────────────────────────────
@@ -526,7 +565,7 @@ function renderWords() {
     <div class="card table-wrap">
       <table class="words-table">
         <thead><tr>
-          <th title="Participa en el quiz">✓</th><th></th><th>Inglés</th><th>Sonido</th>
+          <th title="Participa en el quiz">✓</th><th title="Escena">🖼</th><th></th><th>Inglés</th><th>Sonido</th>
           <th>Español</th><th>Sinónimo</th><th>Antónimo</th><th>Ejemplo</th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -548,6 +587,77 @@ function quizCheckCell(w, editing = false) {
     onchange="toggleQuiz('${w.id}', this.checked)" style="cursor:pointer;"></td>`;
 }
 
+function imageCell(w) {
+  const status = w.image_status || 'none';
+  if (status === 'none') {
+    return `<td><button class="icon-btn" onclick="generateImage('${w.id}')" title="Generar escena">🎨</button></td>`;
+  }
+  const badge = status === 'pending'
+    ? `<span class="sub" style="color:var(--accent);">pendiente</span>` : '';
+  return `<td style="text-align:center;">
+    <img src="${API}/${esc(w.image)}?v=${Date.now()}" alt="escena" loading="lazy"
+      onclick="openImageModal('${w.id}')"
+      style="width:40px; height:30px; object-fit:cover; border-radius:4px; cursor:zoom-in;">
+    ${badge}</td>`;
+}
+
+function openImageModal(id) {
+  const w = allWords.find(x => x.id === id);
+  if (!w || !w.image) return;
+  const m = document.getElementById('image-modal');
+  document.getElementById('image-modal-word').textContent = `${w.word_en} · ${w.word_es}`;
+  document.getElementById('image-modal-img').src = `${API}/${w.image}?v=${Date.now()}`;
+  document.getElementById('image-modal-hint').textContent =
+    w.image_status === 'pending'
+      ? '¿Entiendes la escena? Apruébala para que el quiz la use.'
+      : 'Escena aprobada — el quiz la está usando.';
+  const btn = (label, fn) =>
+    `<button class="btn-ghost" style="padding:8px 14px;" onclick="${fn}">${label}</button>`;
+  document.getElementById('image-modal-actions').innerHTML =
+    (w.image_status === 'pending' ? btn('✓ La entiendo (aprobar)', `setImageStatus('${w.id}','approved')`) : '') +
+    btn('🎨 Regenerar', `generateImage('${w.id}')`) +
+    btn('✕ Descartar', `setImageStatus('${w.id}','none')`);
+  m.style.display = 'flex';
+}
+
+function closeImageModal() {
+  document.getElementById('image-modal').style.display = 'none';
+}
+
+async function generateImage(id) {
+  toast('Generando escena…', 'info');
+  try {
+    const res = await fetch(`${API}/api/words/${id}/image`, { method: 'POST' });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Error al generar');
+    const updated = await res.json();
+    const i = allWords.findIndex(x => x.id === id);
+    if (i !== -1) allWords[i] = updated;
+    closeImageModal();
+    renderWords();
+    toast('Escena lista — revísala y apruébala', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function setImageStatus(id, status) {
+  try {
+    const res = await fetch(`${API}/api/words/${id}/image/status`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Error');
+    const updated = await res.json();
+    const i = allWords.findIndex(x => x.id === id);
+    if (i !== -1) allWords[i] = updated;
+    closeImageModal();
+    renderWords();
+    toast(status === 'approved' ? 'Escena aprobada ✓' : 'Escena descartada', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 function renderRow(w) {
   const wId = w.id.replace(/-/g, '');
   const isPhrase = (w.type || 'word') === 'phrase';
@@ -555,6 +665,7 @@ function renderRow(w) {
   return `
   <tr${enabled ? '' : ' style="opacity:.45;"'}>
     ${quizCheckCell(w)}
+    ${imageCell(w)}
     <td style="white-space:nowrap;">
       <button class="icon-btn" onclick="startEdit('${w.id}')" title="Editar">✏️</button>
       <button class="icon-btn" onclick="deleteWord('${w.id}')" title="Eliminar" style="color:var(--faint);">✕</button>
@@ -582,6 +693,7 @@ function renderEditRow(w) {
   return `
   <tr style="background:var(--elevated);">
     ${quizCheckCell(w, true)}
+    ${imageCell(w)}
     <td style="white-space:nowrap;">
       <button class="icon-btn" onclick="saveEdit('${w.id}')" title="Guardar">💾</button>
       <button class="icon-btn" onclick="cancelEdit()" title="Cancelar">✖️</button>
@@ -882,15 +994,22 @@ const PROMPT_LABEL = {
   mc_phrase:{ es_to_en: '¿Cuál es la frase en inglés?', en_to_es: '¿Qué significa esta frase?' },
   cloze:    { es_to_en: 'Completa la frase:' },
   typing:   { es_to_en: 'Escribe la traducción en inglés:', en_to_es: 'Escribe la traducción en español:' },
+  mc_image: { es_to_en: '¿Qué palabra o frase representa esta escena?' },
 };
 
 function renderQuestion(q, container, onDone) {
   const label = (PROMPT_LABEL[q.type] || {})[q.direction] || 'Responde:';
   const speakLang = (q.direction === 'en_to_es' || q.type === 'cloze') ? 'en-US' : 'es-ES';
   const promptSize = q.type.startsWith('mc_') || q.type === 'cloze' ? 18 : 30;
+  const imgBlock = q.image_url
+    ? `<img src="${API}${esc(q.image_url)}" alt="escena"
+        style="max-width:100%; max-height:${q.type === 'mc_image' ? '260' : '120'}px;
+        border-radius:8px; margin-bottom:10px; display:block;">`
+    : '';
   let html = `
     <p style="font-size:12px; color:var(--muted); margin-bottom:8px;">${label}
       <span class="badge badge-green" style="margin-left:6px;">${q.direction === 'es_to_en' ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸'}</span></p>
+    ${imgBlock}
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
       <p style="font-size:${promptSize}px; font-weight:700; color:var(--accent); margin:0;">${esc(q.prompt)}</p>
       <button class="speak-btn" onclick="speak(${JSON.stringify(q.prompt).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}, '${speakLang}', null)" title="Escuchar">🔊</button>
