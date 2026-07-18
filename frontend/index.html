@@ -742,7 +742,7 @@ function renderRow(w) {
     <td style="font-weight:600; color:var(--accent);">
       ${esc(w.word_en)}
       <button class="speak-btn" id="spk-${wId}" onclick="speakById('${w.id}','spk-${wId}')" title="Escuchar">🔊</button>
-      ${w.dialogue && w.dialogue_pos ? `<span class="sub">💬 ${esc(w.dialogue)} #${esc(String(w.dialogue_pos))}</span>` : ''}
+      ${w.dialogue && w.dialogue_pos ? `<span class="sub">💬 ${/^\d+$/.test(String(w.dialogue)) ? `diálogo ${esc(String(w.dialogue))}` : esc(w.dialogue)} · frase ${esc(String(w.dialogue_pos))}</span>` : ''}
     </td>
     <td>${w.pronunciation_es ? esc(w.pronunciation_es) : DASH}${w.ipa ? `<span class="sub">${esc(w.ipa)}</span>` : ''}</td>
     <td>${esc(w.word_es || '')}</td>
@@ -773,8 +773,20 @@ function renderEditRow(w) {
     <td>${editInput('pronunciation_es', w.pronunciation_es, 'escribe cómo suena')}</td>
     <td>${editInput('word_es', w.word_es, 'traducción')}</td>
     ${isPhrase
-      ? `<td colspan="3" style="font-size:12px;">💬 ${editInput('dialogue', w.dialogue, 'diálogo (vacío = frase suelta)')}
-             ${editInput('dialogue_pos', w.dialogue_pos || '', '# línea')}</td>`
+      ? (() => {
+          const marked = !!(w.dialogue && w.dialogue_pos);
+          const dis = marked ? '' : ' disabled';
+          return `<td colspan="3" style="font-size:12px;">
+            <label style="white-space:nowrap; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="edit-is_dialogue"${marked ? ' checked' : ''}
+                onchange="toggleDialogueInputs(this.checked)" style="cursor:pointer;"> 💬 Es diálogo
+            </label>
+            <input id="edit-dialogue" value="${esc(w.dialogue || '')}" placeholder="# de diálogo (ej: 1)"
+              style="max-width:130px;"${dis}>
+            <input id="edit-dialogue_pos" value="${esc(String(w.dialogue_pos || '') || '')}" placeholder="# de frase (1, 2, 3…)"
+              style="max-width:130px;"${dis}>
+          </td>`;
+        })()
       : `<td>${editInput('synonym_en', w.synonym_en, 'EN')}
              ${editInput('synonym_es', w.synonym_es, 'ES')}</td>
          <td>${editInput('antonym_en', w.antonym_en, 'EN')}
@@ -813,7 +825,14 @@ function cancelEdit() {
   renderWords();
 }
 
-const EDIT_FIELDS_PHRASE = ['word_es', 'pronunciation_es', 'dialogue', 'dialogue_pos'];
+const EDIT_FIELDS_PHRASE = ['word_es', 'pronunciation_es'];   // diálogo se maneja aparte (checkbox)
+
+function toggleDialogueInputs(checked) {
+  ['edit-dialogue', 'edit-dialogue_pos'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !checked;
+  });
+}
 const EDIT_FIELDS_WORD = [...EDIT_FIELDS_PHRASE, 'synonym_en', 'synonym_es',
                           'antonym_en', 'antonym_es', 'example_en', 'example_es'];
 
@@ -836,19 +855,24 @@ async function saveEdit(id) {
     document.getElementById('edit-error').textContent = 'La traducción no puede estar vacía';
     return;
   }
-  if ('dialogue_pos' in body) {
-    if (body.dialogue_pos === '') {
-      if (body.dialogue !== '' && (w.dialogue_pos || 0) >= 1) {
-        document.getElementById('edit-error').textContent =
-          'Para sacar la frase del diálogo, vacía también el campo diálogo';
+  // Diálogo: gobernado por el checkbox "Es diálogo"
+  const dlgChk = document.getElementById('edit-is_dialogue');
+  if (dlgChk) {
+    if (!dlgChk.checked) {
+      if ((w.dialogue || '') !== '') body.dialogue = '';   // el server limpia también la posición
+    } else {
+      const name = document.getElementById('edit-dialogue').value.trim();
+      const pos = document.getElementById('edit-dialogue_pos').value.trim();
+      if (!name) {
+        document.getElementById('edit-error').textContent = 'Indica el # de diálogo';
         return;
       }
-      delete body.dialogue_pos;                    // se limpia dejando el diálogo vacío
-    } else if (!/^\d+$/.test(body.dialogue_pos)) {
-      document.getElementById('edit-error').textContent = 'La línea del diálogo debe ser un número';
-      return;
-    } else {
-      body.dialogue_pos = parseInt(body.dialogue_pos, 10);
+      if (!/^\d+$/.test(pos) || parseInt(pos, 10) < 1) {
+        document.getElementById('edit-error').textContent = 'El # de frase debe ser un número desde 1';
+        return;
+      }
+      if (name !== String(w.dialogue ?? '').trim()) body.dialogue = name;
+      if (parseInt(pos, 10) !== (w.dialogue_pos || 0)) body.dialogue_pos = parseInt(pos, 10);
     }
   }
   if (Object.keys(body).length === 0) { cancelEdit(); return; }
