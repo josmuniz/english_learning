@@ -134,7 +134,12 @@
 
     /* Grid for word list */
     .table-wrap { overflow-x: auto; }
-    .words-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .words-table { table-layout: fixed; width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; }
+    .words-table th { position: relative; }
+    .words-table td { overflow-wrap: break-word; }
+    .col-grip { position: absolute; top: 0; right: -4px; width: 8px; height: 100%;
+      cursor: col-resize; user-select: none; z-index: 2; }
+    .col-grip:hover, .col-grip.active { background: var(--accent); opacity: .35; }
     .words-table th { text-align: left; padding: 8px 10px; font-size: 11px; color: var(--faint);
       text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); white-space: nowrap; }
     .words-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -263,6 +268,7 @@
               <label><input type="checkbox" id="type-mc_word" checked onchange="toggleType('mc_word')"/> Palabra (opciones)</label>
               <label><input type="checkbox" id="type-mc_phrase" checked onchange="toggleType('mc_phrase')"/> Frase (opciones)</label>
               <label><input type="checkbox" id="type-mc_image" checked onchange="toggleType('mc_image')"/> Escena (imagen)</label>
+              <label><input type="checkbox" id="type-dialogue_next" checked onchange="toggleType('dialogue_next')"/> Diálogo (siguiente frase)</label>
               <label><input type="checkbox" id="type-cloze" checked onchange="toggleType('cloze')"/> Completar hueco</label>
               <label><input type="checkbox" id="type-typing" checked onchange="toggleType('typing')"/> Escribir</label>
             </div>
@@ -417,13 +423,25 @@ let timerTick = null;
 const CONFIG_KEY = 'elearn_config';
 const DEFAULT_CFG = {
   intervalMin: 15, direction: 'both',
-  types: ['mc_word', 'mc_phrase', 'cloze', 'typing', 'mc_image'],
+  types: ['mc_word', 'mc_phrase', 'cloze', 'typing', 'mc_image', 'dialogue_next'],
   perInterrupt: 1, addLang: 'en', timerActive: false, timerEndsAt: null,
+  typesVersion: 2,
 };
 let cfg = loadConfig();
 
+const TYPES_VERSION = 2;   // subir al agregar tipos de pregunta nuevos
 function loadConfig() {
-  try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}') }; }
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+    const merged = { ...DEFAULT_CFG, ...saved };
+    // migración: configs guardadas antes de tipos nuevos los activan una vez
+    if ((saved.typesVersion || 0) < TYPES_VERSION) {
+      merged.types = [...new Set([...(saved.types || DEFAULT_CFG.types),
+                                  'mc_image', 'dialogue_next'])];
+      merged.typesVersion = TYPES_VERSION;
+    }
+    return merged;
+  }
   catch { return { ...DEFAULT_CFG }; }
 }
 function saveConfig() { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
@@ -456,7 +474,7 @@ function toggleType(t) {
 function applyConfigToUI() {
   setIntervalMin(cfg.intervalMin);
   setQuizMode(cfg.direction);
-  ['mc_word','mc_phrase','cloze','typing','mc_image'].forEach(t => {
+  ['mc_word','mc_phrase','cloze','typing','mc_image','dialogue_next'].forEach(t => {
     document.getElementById(`type-${t}`).checked = cfg.types.includes(t);
   });
   document.getElementById('per-interrupt').value = String(cfg.perInterrupt);
@@ -569,16 +587,59 @@ function renderWords() {
   const rows = allWords.slice().reverse()
     .map(w => (editingId === w.id ? renderEditRow(w) : renderRow(w))).join('');
 
+  const th = (label, key, attrs = '') =>
+    `<th${attrs}>${label}<span class="col-grip" data-col="${key}" title="Arrastra para cambiar el ancho"></span></th>`;
   grid.innerHTML = `
     <div class="card table-wrap">
       <table class="words-table">
+        <colgroup>${COL_DEFS.map(c =>
+          `<col data-col="${c.key}" style="width:${colWidths[c.key] || c.w}px">`).join('')}</colgroup>
         <thead><tr>
-          <th title="Participa en el quiz">✓</th><th title="Escena">🖼</th><th></th><th>Inglés</th><th>Sonido</th>
-          <th>Español</th><th>Sinónimo</th><th>Antónimo</th><th>Ejemplo</th>
+          <th title="Participa en el quiz">✓</th><th title="Escena">🖼</th><th></th>
+          ${th('Inglés', 'en')}${th('Sonido', 'son')}${th('Español', 'es')}
+          ${th('Sinónimo', 'syn')}${th('Antónimo', 'ant')}${th('Ejemplo', 'ej')}
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+  initColResize();
+}
+
+// ── Anchos de columna ajustables (persisten en localStorage) ───────
+const COL_DEFS = [
+  { key: 'chk', w: 36 }, { key: 'img', w: 60 }, { key: 'act', w: 76 },
+  { key: 'en', w: 200 }, { key: 'son', w: 140 }, { key: 'es', w: 160 },
+  { key: 'syn', w: 140 }, { key: 'ant', w: 140 }, { key: 'ej', w: 240 },
+];
+let colWidths = {};
+try { colWidths = JSON.parse(localStorage.getItem('elearn_col_widths') || '{}'); }
+catch { colWidths = {}; }
+
+function initColResize() {
+  document.querySelectorAll('.words-table .col-grip').forEach(grip => {
+    grip.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const key = grip.dataset.col;
+      const col = document.querySelector(`.words-table col[data-col="${key}"]`);
+      if (!col) return;
+      const startX = e.clientX;
+      const startW = col.getBoundingClientRect().width;
+      grip.classList.add('active');
+      const move = ev => {
+        const w = Math.max(70, Math.round(startW + ev.clientX - startX));
+        col.style.width = w + 'px';
+        colWidths[key] = w;
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        grip.classList.remove('active');
+        localStorage.setItem('elearn_col_widths', JSON.stringify(colWidths));
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  });
 }
 
 const DASH = '<span style="color:var(--faint);">—</span>';
@@ -681,6 +742,7 @@ function renderRow(w) {
     <td style="font-weight:600; color:var(--accent);">
       ${esc(w.word_en)}
       <button class="speak-btn" id="spk-${wId}" onclick="speakById('${w.id}','spk-${wId}')" title="Escuchar">🔊</button>
+      ${w.dialogue && w.dialogue_pos ? `<span class="sub">💬 ${esc(w.dialogue)} #${esc(String(w.dialogue_pos))}</span>` : ''}
     </td>
     <td>${w.pronunciation_es ? esc(w.pronunciation_es) : DASH}${w.ipa ? `<span class="sub">${esc(w.ipa)}</span>` : ''}</td>
     <td>${esc(w.word_es || '')}</td>
@@ -711,7 +773,8 @@ function renderEditRow(w) {
     <td>${editInput('pronunciation_es', w.pronunciation_es, 'escribe cómo suena')}</td>
     <td>${editInput('word_es', w.word_es, 'traducción')}</td>
     ${isPhrase
-      ? `<td colspan="3" style="color:var(--faint); font-size:12px;">— no aplica a frases —</td>`
+      ? `<td colspan="3" style="font-size:12px;">💬 ${editInput('dialogue', w.dialogue, 'diálogo (vacío = frase suelta)')}
+             ${editInput('dialogue_pos', w.dialogue_pos || '', '# línea')}</td>`
       : `<td>${editInput('synonym_en', w.synonym_en, 'EN')}
              ${editInput('synonym_es', w.synonym_es, 'ES')}</td>
          <td>${editInput('antonym_en', w.antonym_en, 'EN')}
@@ -750,7 +813,7 @@ function cancelEdit() {
   renderWords();
 }
 
-const EDIT_FIELDS_PHRASE = ['word_es', 'pronunciation_es'];
+const EDIT_FIELDS_PHRASE = ['word_es', 'pronunciation_es', 'dialogue', 'dialogue_pos'];
 const EDIT_FIELDS_WORD = [...EDIT_FIELDS_PHRASE, 'synonym_en', 'synonym_es',
                           'antonym_en', 'antonym_es', 'example_en', 'example_es'];
 
@@ -772,6 +835,21 @@ async function saveEdit(id) {
   if (body.word_es === '') {
     document.getElementById('edit-error').textContent = 'La traducción no puede estar vacía';
     return;
+  }
+  if ('dialogue_pos' in body) {
+    if (body.dialogue_pos === '') {
+      if (body.dialogue !== '' && (w.dialogue_pos || 0) >= 1) {
+        document.getElementById('edit-error').textContent =
+          'Para sacar la frase del diálogo, vacía también el campo diálogo';
+        return;
+      }
+      delete body.dialogue_pos;                    // se limpia dejando el diálogo vacío
+    } else if (!/^\d+$/.test(body.dialogue_pos)) {
+      document.getElementById('edit-error').textContent = 'La línea del diálogo debe ser un número';
+      return;
+    } else {
+      body.dialogue_pos = parseInt(body.dialogue_pos, 10);
+    }
   }
   if (Object.keys(body).length === 0) { cancelEdit(); return; }
 
@@ -1003,11 +1081,13 @@ const PROMPT_LABEL = {
   cloze:    { es_to_en: 'Completa la frase:' },
   typing:   { es_to_en: 'Escribe la traducción en inglés:', en_to_es: 'Escribe la traducción en español:' },
   mc_image: { es_to_en: '¿Qué palabra o frase representa esta escena?' },
+  dialogue_next: { es_to_en: '¿Cuál es la siguiente frase del diálogo?' },
 };
 
 function renderQuestion(q, container, onDone) {
   const label = (PROMPT_LABEL[q.type] || {})[q.direction] || 'Responde:';
-  const speakLang = (q.direction === 'en_to_es' || q.type === 'cloze') ? 'en-US' : 'es-ES';
+  const speakLang = (q.direction === 'en_to_es' || q.type === 'cloze'
+                     || q.type === 'dialogue_next') ? 'en-US' : 'es-ES';
   const promptSize = q.type.startsWith('mc_') || q.type === 'cloze' ? 18 : 30;
   const imgBlock = q.image_url
     ? `<img src="${API}${esc(q.image_url)}" alt="escena"
@@ -1016,7 +1096,7 @@ function renderQuestion(q, container, onDone) {
     : '';
   let html = `
     <p style="font-size:12px; color:var(--muted); margin-bottom:8px;">${label}
-      <span class="badge badge-green" style="margin-left:6px;">${q.direction === 'es_to_en' ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸'}</span></p>
+      <span class="badge badge-green" style="margin-left:6px;">${q.type === 'dialogue_next' ? '💬 EN' : (q.direction === 'es_to_en' ? '🇪🇸 → 🇬🇧' : '🇬🇧 → 🇪🇸')}</span></p>
     ${imgBlock}
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
       <p style="font-size:${promptSize}px; font-weight:700; color:var(--accent); margin:0;">${esc(q.prompt)}</p>
@@ -1054,7 +1134,9 @@ function renderQuestion(q, container, onDone) {
     }
     const fb = container.querySelector('#q-feedback');
     // Sonido de la respuesta: solo cuando la respuesta correcta es el inglés
-    const fbPron = (q.direction === 'es_to_en' && data.word && data.word.pronunciation_es)
+    // en dialogue_next la respuesta es otra frase: la pronunciación de la línea N no aplica
+    const fbPron = (q.direction === 'es_to_en' && q.type !== 'dialogue_next'
+                    && data.word && data.word.pronunciation_es)
       ? ` <span class="pronunciation">(${esc(data.word.pronunciation_es)})</span>` : '';
     fb.innerHTML = data.correct
       ? `<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);border-radius:8px;padding:10px 14px;">✅ <strong style="color:var(--green);">¡Correcto!</strong> <span style="font-size:12px;color:var(--muted);">${esc(data.correct_answer)}</span>${fbPron}</div>`
