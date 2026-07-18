@@ -328,3 +328,29 @@ La `GEMINI_API_KEY` del entorno resultó inválida para la API de Gemini (401 `A
 ### 7.5 Próximo paso
 
 Sonido (pronunciación) visible al revelar respuestas del quiz (pedido del usuario). Features en cola: panel de control (spec esperando review), motor adaptativo.
+
+---
+
+## Paso 8 · Diálogos + quiz siguiente-frase + columnas ajustables (2026-07-18)
+
+**Meta:** Marcar frases que pertenecen a un diálogo y practicar su continuidad: el quiz muestra la línea N y la respuesta correcta es la N+1. Además, anchos de columna ajustables en la grilla.
+
+### 8.1 Qué se hizo
+
+- Campos `dialogue` + `dialogue_pos` por frase (PATCH con validaciones: pos obligatoria con nombre → 422, posición duplicada → 409). Edición en la fila (solo frases) con badge `💬 nombre #pos`.
+- Motor `dialogue_next`: líneas habilitadas ordenadas con huecos tolerados; elegible con línea siguiente y ≥3 distractores; opciones = N+1 + distractores por prioridad (mismo diálogo → otras frases → resto) sin duplicados; respuesta stale (diálogo cambiado entre pregunta y respuesta) → 409.
+- `quiz_next` ahora prefiere palabras elegibles para los tipos pedidos (pedir solo `dialogue_next` ya no cae a `mc_word`).
+- Funciona en la práctica web (label, TTS en-US, badge 💬, migración de config guardada) y en el popup nativo (label propio, sin pronunciación engañosa junto a la respuesta N+1).
+- Columnas de la grilla redimensionables arrastrando el borde del header (mín. 70px, persistidas en localStorage).
+
+### 8.2 Archivos
+
+- **Modificados:** `backend/main.py`, `backend/quiz.py`, `notifier/quiz_dialog.py`, `frontend/index.html`, tests (`test_quiz.py`, `test_edit.py`, `test_notifier.py`)
+
+### 8.3 Tests
+
+`python3 -m pytest backend/tests/ -q` → **109 passed** (17 nuevos). Verificación E2E real: marcado por UI con badges, 5/5 preguntas `dialogue_next` deterministas con 4 opciones únicas, N+1 aceptada / errada rechazada, práctica web con label y feedback correctos; resize verificado (arrastre, mínimo, persistencia tras recarga). Code-review high (18 agentes): 10 hallazgos, 10 corregidos. Security review: PASS.
+
+### 8.4 Próximo paso
+
+Pendientes del usuario: validar escenas generadas, rotar DASHSCOPE_API_KEY, review del spec panel de control. Feature B (motor adaptativo) en cola.
