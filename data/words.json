@@ -72,8 +72,10 @@
     "definition_es": "",
     "example_en": "",
     "example_es": "",
-    "times_practiced": 1,
-    "times_correct": 1
+    "times_practiced": 5,
+    "times_correct": 4,
+    "dialogue": "saludo",
+    "dialogue_pos": 1
   },
   {
     "id": "5feb0b0f-a12d-47f7-9666-b00cdd0fba1c",
@@ -208,7 +210,9 @@
     "example_en": "",
     "example_es": "",
     "times_practiced": 1,
-    "times_correct": 1
+    "times_correct": 1,
+    "dialogue": "saludo",
+    "dialogue_pos": 2
   },
   {
     "id": "1922f7e0-e543-4bc4-82f7-d57bbf1b5229",
@@ -570,7 +574,7 @@
     "definition_es": "Un repentino arrebato en algo.",
     "example_en": "How does that idea grab you?",
     "example_es": "How Does That Grab You?",
-    "times_practiced": 0,
+    "times_practiced": 1,
     "times_correct": 0
   },
   {
@@ -761,13 +765,97 @@
     "example_en": "",
     "example_es": "",
     "times_practiced": 0,
-    "times_correct": 0
+    "times_correct": 0,
+    "image": "images/9b85d196-fee1-44f9-80e4-be7c7d96aa08.png",
+    "image_status": "pending"
   },
   {
     "id": "795db4f6-5ba8-41d2-bb24-e217445e375d",
     "created_at": "2026-07-17T19:14:05.196158",
     "word_en": "thanks, i'll try. take care",
     "word_es": "gracias, lo intentaré. Cuídate",
+    "type": "phrase",
+    "ipa": "",
+    "pronunciation_es": "zenks. al trai teikear",
+    "synonym_en": "",
+    "synonym_es": "",
+    "antonym_en": "",
+    "antonym_es": "",
+    "definition_en": "",
+    "definition_es": "",
+    "example_en": "",
+    "example_es": "",
+    "times_practiced": 1,
+    "times_correct": 1,
+    "image": "images/795db4f6-5ba8-41d2-bb24-e217445e375d.png",
+    "image_status": "pending"
+  },
+  {
+    "id": "5824ad52-860d-423d-9a12-35007ff5f5d3",
+    "created_at": "2026-07-17T22:20:46.354104",
+    "word_en": "i'll see you later",
+    "word_es": "Nos vemos más tarde",
+    "type": "phrase",
+    "ipa": "",
+    "pronunciation_es": "aial sii iu leiter",
+    "synonym_en": "",
+    "synonym_es": "",
+    "antonym_en": "",
+    "antonym_es": "",
+    "definition_en": "",
+    "definition_es": "",
+    "example_en": "",
+    "example_es": "",
+    "times_practiced": 0,
+    "times_correct": 0,
+    "image": "images/5824ad52-860d-423d-9a12-35007ff5f5d3.png",
+    "image_status": "pending"
+  },
+  {
+    "id": "7a44e832-56ec-4278-a7aa-2ae442d1a504",
+    "created_at": "2026-07-17T22:22:23.881053",
+    "word_en": "we'll make  dinner",
+    "word_es": "haremos la cena",
+    "type": "phrase",
+    "ipa": "",
+    "pronunciation_es": "wial meik diner",
+    "synonym_en": "",
+    "synonym_es": "",
+    "antonym_en": "",
+    "antonym_es": "",
+    "definition_en": "",
+    "definition_es": "",
+    "example_en": "",
+    "example_es": "",
+    "times_practiced": 0,
+    "times_correct": 0,
+    "image": "images/7a44e832-56ec-4278-a7aa-2ae442d1a504.png",
+    "image_status": "pending"
+  },
+  {
+    "id": "a1e5fba6-6279-47d7-9c7a-6bd8657e21f5",
+    "created_at": "2026-07-17T22:23:55.500013",
+    "word_en": "she'll take the bus",
+    "word_es": "ella tomará el autobús",
+    "type": "phrase",
+    "ipa": "",
+    "pronunciation_es": "shial teik de bas",
+    "synonym_en": "",
+    "synonym_es": "",
+    "antonym_en": "",
+    "antonym_es": "",
+    "definition_en": "",
+    "definition_es": "",
+    "example_en": "",
+    "example_es": "",
+    "times_practiced": 0,
+    "times_correct": 0
+  },
+  {
+    "id": "34bd6c27-34be-4bb9-b6e9-602045c8e8be",
+    "created_at": "2026-07-17T22:25:15.990347",
+    "word_en": "you will go home soon",
+    "word_es": "Irás a casa. ",
     "type": "phrase",
     "ipa": "",
     "pronunciation_es": "",
@@ -780,6 +868,8 @@
     "example_en": "",
     "example_es": "",
     "times_practiced": 0,
-    "times_correct": 0
+    "times_correct": 0,
+    "image": "images/34bd6c27-34be-4bb9-b6e9-602045c8e8be.png",
+    "image_status": "pending"
   }
 ]
