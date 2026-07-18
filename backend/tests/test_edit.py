@@ -174,3 +174,64 @@ def test_quiz_next_all_disabled_404(client, mock_apis):
     r = client.get("/api/quiz/next")
     assert r.status_code == 404
     assert r.json()["detail"] == "No hay palabras habilitadas para el quiz"
+
+
+# ── dialogue: marcado de frases de un diálogo ────────────────────────
+
+def test_patch_dialogue_y_pos(client, phrase_id):
+    r = client.patch(f"/api/words/{phrase_id}",
+                     json={"dialogue": "tienda", "dialogue_pos": 2})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["dialogue"] == "tienda" and d["dialogue_pos"] == 2
+
+
+def test_patch_dialogue_pos_cero_422(client, phrase_id):
+    client.patch(f"/api/words/{phrase_id}", json={"dialogue": "tienda", "dialogue_pos": 1})
+    r = client.patch(f"/api/words/{phrase_id}", json={"dialogue_pos": 0})
+    assert r.status_code == 422
+    assert r.json()["detail"] == "La línea del diálogo debe ser 1 o mayor"
+
+
+def test_patch_dialogue_sin_pos_422(client, phrase_id):
+    r = client.patch(f"/api/words/{phrase_id}", json={"dialogue": "tienda"})
+    assert r.status_code == 422        # nombre sin # de línea = estado inerte
+
+
+def test_patch_dialogue_pos_duplicada_409(client, mock_apis, phrase_id):
+    otro = client.post("/api/words", json={"word": "kick the bucket"}).json()["id"]
+    client.patch(f"/api/words/{otro}", json={"dialogue": "tienda", "dialogue_pos": 1})
+    r = client.patch(f"/api/words/{phrase_id}",
+                     json={"dialogue": "tienda", "dialogue_pos": 1})
+    assert r.status_code == 409
+
+
+def test_patch_dialogue_vacio_limpia_pos(client, phrase_id):
+    client.patch(f"/api/words/{phrase_id}",
+                 json={"dialogue": "tienda", "dialogue_pos": 3})
+    r = client.patch(f"/api/words/{phrase_id}", json={"dialogue": ""})
+    assert r.status_code == 200
+    assert r.json()["dialogue"] == "" and r.json()["dialogue_pos"] == 0
+
+
+def test_quiz_next_prefiere_palabras_elegibles(client, mock_apis):
+    ids = [client.post("/api/words", json={"word": w}).json()["id"]
+           for w in ("uno dos x", "tres cuatro y", "strong", "weak", "quiet")]
+    client.patch(f"/api/words/{ids[0]}", json={"dialogue": "d", "dialogue_pos": 1})
+    client.patch(f"/api/words/{ids[1]}", json={"dialogue": "d", "dialogue_pos": 2})
+    for _ in range(10):
+        q = client.get("/api/quiz/next?types=dialogue_next").json()
+        assert q["type"] == "dialogue_next"     # nunca fallback a mc_word
+        assert q["word_id"] == ids[0]           # única línea con siguiente
+
+
+def test_quiz_answer_dialogue_next_stale_409(client, mock_apis):
+    ids = [client.post("/api/words", json={"word": w}).json()["id"]
+           for w in ("uno dos x", "tres cuatro y", "strong", "weak", "quiet")]
+    client.patch(f"/api/words/{ids[0]}", json={"dialogue": "d", "dialogue_pos": 1})
+    client.patch(f"/api/words/{ids[1]}", json={"dialogue": "d", "dialogue_pos": 2})
+    client.patch(f"/api/words/{ids[1]}", json={"dialogue": ""})   # el diálogo cambió
+    r = client.post("/api/quiz/answer", json={
+        "word_id": ids[0], "type": "dialogue_next",
+        "direction": "es_to_en", "answer": "tres cuatro y"})
+    assert r.status_code == 409

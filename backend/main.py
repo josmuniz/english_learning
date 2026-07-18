@@ -73,6 +73,8 @@ class WordRequest(BaseModel):
 class WordUpdateRequest(BaseModel):
     word_es: str | None = None
     quiz_enabled: bool | None = None
+    dialogue: str | None = None
+    dialogue_pos: int | None = None
     pronunciation_es: str | None = None
     ipa: str | None = None
     synonym_en: str | None = None
@@ -381,6 +383,16 @@ async def update_word(word_id: str, req: WordUpdateRequest):
         dup = updates["word_es"].lower()
         if any(w["id"] != word_id and dup == w.get("word_es", "").lower() for w in words):
             raise HTTPException(409, "Esa traducción ya existe en tu vocabulario")
+    if "dialogue" in updates and not updates["dialogue"]:
+        updates["dialogue_pos"] = 0          # sin diálogo no hay posición
+    final_dialogue = updates.get("dialogue", target.get("dialogue", ""))
+    if ("dialogue" in updates or "dialogue_pos" in updates) and final_dialogue:
+        final_pos = updates.get("dialogue_pos", target.get("dialogue_pos", 0))
+        if final_pos < 1:
+            raise HTTPException(422, "La línea del diálogo debe ser 1 o mayor")
+        if any(w["id"] != word_id and w.get("dialogue") == final_dialogue
+               and w.get("dialogue_pos") == final_pos for w in words):
+            raise HTTPException(409, "Esa posición ya está usada en ese diálogo")
 
     target.update(updates)
     save_words(words)
@@ -514,7 +526,7 @@ async def validate_sentence(req: ValidateRequest):
 
 
 @app.get("/api/quiz/next")
-async def quiz_next(types: str = "mc_word,mc_phrase,cloze,typing",
+async def quiz_next(types: str = "mc_word,mc_phrase,cloze,typing,dialogue_next",
                     direction: str = "both"):
     requested = [t.strip() for t in types.split(",")
                  if t.strip() in quiz_engine.ALL_TYPES]
@@ -530,7 +542,11 @@ async def quiz_next(types: str = "mc_word,mc_phrase,cloze,typing",
     pool = [w for w in words if w.get("quiz_enabled", True)]
     if not pool:
         raise HTTPException(404, "No hay palabras habilitadas para el quiz")
-    word = quiz_engine.pick_word(pool)
+    # Preferir palabras elegibles para algún tipo pedido (evita el fallback a
+    # mc_word cuando el usuario pide solo tipos específicos, ej. dialogue_next)
+    eligible_pool = [w for w in pool
+                     if quiz_engine.eligible_types(w, words, requested)]
+    word = quiz_engine.pick_word(eligible_pool or pool)
     qtype = quiz_engine.choose_type(word, words, requested)
     return quiz_engine.build_question(word, qtype, direction, words)
 
@@ -546,7 +562,10 @@ async def quiz_answer(req: QuizAnswerRequest):
     if not word:
         raise HTTPException(404, "Palabra no encontrada")
 
-    expected, synonym = quiz_engine.expected_answer(word, req.type, req.direction)
+    expected, synonym = quiz_engine.expected_answer(word, req.type, req.direction,
+                                                    all_words=words)
+    if req.type == "dialogue_next" and not expected:
+        raise HTTPException(409, "La pregunta ya no es válida (el diálogo cambió)")
     is_correct = quiz_engine.is_match(req.answer, expected, synonym)
 
     for w in words:

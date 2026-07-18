@@ -288,3 +288,83 @@ def test_quiz_next_default_excluye_mc_image():
     import backend.main as main
     default = inspect.signature(main.quiz_next).parameters["types"].default
     assert "mc_image" not in default
+
+
+# ── dialogue_next: la respuesta es la siguiente línea del diálogo ────
+
+def _dlg(i, name, pos, **kw):
+    w = make_word(i, type="phrase", **kw)
+    w["dialogue"] = name
+    w["dialogue_pos"] = pos
+    return w
+
+
+def test_dialogue_lines_ordena_y_filtra():
+    words = [_dlg(1, "tienda", 3), _dlg(2, "tienda", 1), _dlg(3, "otro", 1),
+             make_word(4), _dlg(5, "tienda", 2)]
+    lines = quiz.dialogue_lines("tienda", words)
+    assert [w["dialogue_pos"] for w in lines] == [1, 2, 3]
+
+
+def test_next_line_con_huecos_y_ultima():
+    words = [_dlg(1, "d", 2), _dlg(2, "d", 4), make_word(3), make_word(4)]
+    assert quiz.next_line(words[0], words)["id"] == words[1]["id"]   # 2 → 4 (hueco)
+    assert quiz.next_line(words[1], words) is None                   # última
+    assert quiz.next_line(words[2], words) is None                   # sin diálogo
+
+
+def test_dialogue_next_elegibilidad():
+    words = [_dlg(1, "d", 1), _dlg(2, "d", 2), make_word(3), make_word(4), make_word(5)]
+    assert "dialogue_next" in quiz.eligible_types(words[0], words, ["dialogue_next"])
+    assert "dialogue_next" not in quiz.eligible_types(words[1], words, ["dialogue_next"])  # última
+    solo = [_dlg(1, "solo", 1), make_word(2), make_word(3), make_word(4), make_word(5)]
+    assert "dialogue_next" not in quiz.eligible_types(solo[0], solo, ["dialogue_next"])   # 1 línea
+    pocas = [_dlg(1, "d", 1), _dlg(2, "d", 2), make_word(3), make_word(4)]
+    assert "dialogue_next" not in quiz.eligible_types(pocas[0], pocas, ["dialogue_next"])  # <3 distractores
+
+
+def test_build_question_dialogue_next():
+    words = [_dlg(1, "d", 1), _dlg(2, "d", 2), _dlg(3, "d", 3),
+             make_word(4), make_word(5)]
+    q = quiz.build_question(words[0], "dialogue_next", "both", words)
+    assert q["type"] == "dialogue_next"
+    assert q["direction"] == "es_to_en"
+    assert q["prompt"] == words[0]["word_en"]           # línea N
+    assert words[1]["word_en"] in q["options"]          # correcta = N+1
+    assert len(q["options"]) == 4
+    assert len(set(q["options"])) == 4                  # sin duplicados
+    assert words[0]["word_en"] not in q["options"]      # la línea N no es opción
+
+
+def test_expected_answer_dialogue_next():
+    words = [_dlg(1, "d", 1), _dlg(2, "d", 2), make_word(3), make_word(4)]
+    assert quiz.expected_answer(words[0], "dialogue_next", "es_to_en",
+                                all_words=words) == (words[1]["word_en"], "")
+
+
+def test_quiz_next_default_incluye_dialogue_next():
+    import inspect
+    import backend.main as main
+    default = inspect.signature(main.quiz_next).parameters["types"].default
+    assert "dialogue_next" in default
+
+
+def test_dialogue_lines_omite_deshabilitadas():
+    words = [_dlg(1, "d", 1), _dlg(2, "d", 2), _dlg(3, "d", 3),
+             make_word(4), make_word(5)]
+    words[1]["quiz_enabled"] = False
+    lines = quiz.dialogue_lines("d", words)
+    assert [w["dialogue_pos"] for w in lines] == [1, 3]      # la 2 no participa
+    assert quiz.next_line(words[0], words)["dialogue_pos"] == 3
+
+
+def test_dialogue_next_opciones_sin_duplicados_con_linea_tipo_word():
+    # una línea de diálogo con type != phrase no debe duplicarse en el pool
+    words = [_dlg(1, "d", 1), _dlg(2, "d", 2), _dlg(3, "d", 3),
+             make_word(4), make_word(5)]
+    words[2]["type"] = "word"
+    for seed in range(10):
+        import random as _r
+        q = quiz.build_question(words[0], "dialogue_next", "both", words,
+                                rng=_r.Random(seed))
+        assert len(q["options"]) == len(set(q["options"])) == 4

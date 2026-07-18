@@ -198,3 +198,18 @@ def test_build_result_dialog_muestra_sonido_es_to_en():
     # sin pronunciación: no agrega nada raro
     res3 = {"correct": False, "correct_answer": "sneaky", "word": {}}
     assert "()" not in nd.build_result_dialog(res3, direction="es_to_en")
+
+
+def test_prompt_label_dialogue_next():
+    q = {"type": "dialogue_next", "direction": "es_to_en",
+         "prompt": "hey, how you doing?", "hint": "phrase",
+         "options": ["a", "b", "c", "d"]}
+    out = nd.build_question_dialog(q)
+    assert "siguiente frase del diálogo" in out
+
+
+def test_result_dialog_dialogue_next_sin_pronunciacion():
+    res = {"correct": True, "correct_answer": "fine, thanks",
+           "word": {"pronunciation_es": "jai jau ar yu"}}
+    out = nd.build_result_dialog(res, direction="es_to_en", qtype="dialogue_next")
+    assert "jai jau ar yu" not in out       # la pron es de la línea N, no de la respuesta

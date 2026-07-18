@@ -23,6 +23,7 @@ PROMPT_LABEL = {
     ("mc_phrase", "es_to_en"): "¿Cuál es la frase en inglés?",
     ("mc_phrase", "en_to_es"): "¿Qué significa esta frase?",
     ("cloze", "es_to_en"): "Completa la frase:",
+    ("dialogue_next", "es_to_en"): "¿Cuál es la siguiente frase del diálogo?",
     ("typing", "es_to_en"): "Escribe la traducción en inglés:",
     ("typing", "en_to_es"): "Escribe la traducción en español:",
 }
@@ -55,10 +56,13 @@ def build_question_dialog(q) -> str:
             f'with title "{TITLE}"')
 
 
-def build_result_dialog(res, direction="es_to_en") -> str:
-    # Sonido de la respuesta: solo cuando la respuesta correcta es el inglés
+def build_result_dialog(res, direction="es_to_en", qtype="") -> str:
+    # Sonido de la respuesta: solo cuando la respuesta correcta es el inglés.
+    # En dialogue_next la respuesta es OTRA frase (línea N+1): la pronunciación
+    # guardada pertenece a la línea N y sería engañosa.
     pron = (res.get("word") or {}).get("pronunciation_es", "")
-    extra = f"\n🔊 ({pron})" if pron and direction == "es_to_en" else ""
+    extra = (f"\n🔊 ({pron})"
+             if pron and direction == "es_to_en" and qtype != "dialogue_next" else "")
     if res["correct"]:
         text = f"✅ ¡Correcto!\n\n{res['correct_answer']}{extra}"
     else:
@@ -202,7 +206,8 @@ def main() -> int:
         log("ok" if res["correct"] else "wrong", f"{q['prompt']} -> {answer}")
 
         result = parse_dialog_output(run_osascript(
-            build_result_dialog(res, direction=q.get("direction", "es_to_en"))))
+            build_result_dialog(res, direction=q.get("direction", "es_to_en"),
+                                qtype=q.get("type", ""))))
         if result.get("button") == "+ Agregar":
             offer_add_word()
         return 0

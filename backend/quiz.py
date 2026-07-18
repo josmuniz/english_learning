@@ -3,7 +3,7 @@ import random
 import re
 import unicodedata
 
-ALL_TYPES = ["mc_word", "mc_phrase", "cloze", "typing", "mc_image"]
+ALL_TYPES = ["mc_word", "mc_phrase", "cloze", "typing", "mc_image", "dialogue_next"]
 
 _ARTICLES = re.compile(r"^(el|la|los|las|un|una|unos|unas|the|a|an)\s+", re.IGNORECASE)
 
@@ -38,7 +38,34 @@ def pick_word(words: list, rng=random) -> dict:
     return rng.choices(words, weights=weights, k=1)[0]
 
 
-def expected_answer(word: dict, qtype: str, direction: str) -> tuple:
+def dialogue_lines(name: str, all_words: list) -> list:
+    """Líneas habilitadas de un diálogo ordenadas por posición (pos duplicada: la primera)."""
+    seen = set()
+    out = []
+    for w in sorted((w for w in all_words
+                     if w.get("dialogue") == name and w.get("dialogue_pos", 0) >= 1
+                     and w.get("quiz_enabled", True)),
+                    key=lambda w: w["dialogue_pos"]):
+        if w["dialogue_pos"] not in seen:
+            seen.add(w["dialogue_pos"])
+            out.append(w)
+    return out
+
+
+def next_line(word: dict, all_words: list) -> dict | None:
+    """Siguiente línea del diálogo (tolera huecos), o None si no aplica."""
+    name = word.get("dialogue", "")
+    pos = word.get("dialogue_pos", 0)
+    if not name or pos < 1:
+        return None
+    return next((w for w in dialogue_lines(name, all_words)
+                 if w["dialogue_pos"] > pos), None)
+
+
+def expected_answer(word: dict, qtype: str, direction: str, all_words: list | None = None) -> tuple:
+    if qtype == "dialogue_next":
+        nxt = next_line(word, all_words or [])
+        return (nxt["word_en"] if nxt else ""), ""
     if qtype == "cloze":
         return word["word_en"], ""
     if qtype == "mc_phrase":
@@ -67,6 +94,10 @@ def eligible_types(word: dict, all_words: list, requested: list) -> list:
         elif t == "mc_image":
             if word.get("image_status", "none") == "approved":
                 out.append(t)
+        elif t == "dialogue_next":
+            # n-2 candidatos a distractor (sin la línea N ni la N+1) deben ser ≥3
+            if n >= 5 and next_line(word, all_words) is not None:
+                out.append(t)
         elif t == "cloze":
             if word.get("example_en") and word["word_en"].lower() in word["example_en"].lower():
                 out.append(t)
@@ -93,7 +124,7 @@ def pick_distractors(word: dict, all_words: list, rng=random, need_example: bool
 
 
 def build_question(word: dict, qtype: str, direction: str, all_words: list, rng=random) -> dict:
-    if qtype in ("cloze", "mc_image"):
+    if qtype in ("cloze", "mc_image", "dialogue_next"):
         resolved = "es_to_en"          # la respuesta es la palabra en inglés
     elif direction == "both":
         resolved = rng.choice(["es_to_en", "en_to_es"])
@@ -128,6 +159,22 @@ def build_question(word: dict, qtype: str, direction: str, all_words: list, rng=
         distractors = pick_distractors(word, all_words, rng)
         q["prompt"] = "Observa la escena"
         opts = [word["word_en"]] + [d["word_en"] for d in distractors]
+    elif qtype == "dialogue_next":
+        nxt = next_line(word, all_words)
+        q["prompt"] = word["word_en"]                     # línea N del diálogo
+        # distractores: otras líneas del mismo diálogo, luego otras frases,
+        # luego cualquier otra palabra — nunca la línea N ni la correcta
+        excluded = {word["id"], nxt["id"]}
+        same_dlg = [w for w in dialogue_lines(word["dialogue"], all_words)
+                    if w["id"] not in excluded]
+        used = excluded | {w["id"] for w in same_dlg}
+        other_phrases = [w for w in all_words
+                         if w["id"] not in used and w.get("type") == "phrase"]
+        used |= {w["id"] for w in other_phrases}
+        others = [w for w in all_words if w["id"] not in used]
+        pool = same_dlg + other_phrases + others
+        distractors = pool[:3] if len(pool) <= 3 else rng.sample(pool[:8], 3)
+        opts = [nxt["word_en"]] + [d["word_en"] for d in distractors]
     elif qtype == "mc_phrase":
         distractors = pick_distractors(word, all_words, rng, need_example=True)
         if resolved == "en_to_es":
